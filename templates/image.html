@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- SEO -->
+  <title>{{ image.filename }} — Dhyey Space</title>
+  <meta name="description" content="View and share image '{{ image.filename }}' hosted on Dhyey Space. Uploaded {{ created_str }}." />
+  <link rel="canonical" href="{{ page_url }}" />
+
+  <!-- OpenGraph (makes image unfurl on Discord, Slack, Facebook, etc.) -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:title"       content="{{ image.filename }} — Dhyey Space" />
+  <meta property="og:description" content="Uploaded {{ created_str }} · {{ size_human }} · {{ image.views }} views" />
+  <meta property="og:url"         content="{{ page_url }}" />
+  <meta property="og:image"       content="{{ direct_url }}" />
+  <meta property="og:image:type"  content="{{ image.mime_type }}" />
+  <meta property="og:site_name"   content="Dhyey Space" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card"        content="summary_large_image" />
+  <meta name="twitter:title"       content="{{ image.filename }} — Dhyey Space" />
+  <meta name="twitter:description" content="Uploaded {{ created_str }} · {{ size_human }}" />
+  <meta name="twitter:image"       content="{{ direct_url }}" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+<!-- ── Navigation ── -->
+<nav class="navbar" role="navigation" aria-label="Main navigation">
+  <div class="container navbar-inner">
+    <a href="/" class="logo" aria-label="Dhyey Space home">
+      <div class="logo-icon" aria-hidden="true">🚀</div>
+      <span class="logo-text">Dhyey <span>Space</span></span>
+    </a>
+    <div class="nav-actions">
+      <a href="/" class="btn btn-secondary btn-sm">↑ Upload</a>
+      <button
+        class="theme-toggle"
+        id="theme-toggle"
+        aria-label="Toggle dark/light mode"
+        title="Toggle theme"
+      >☀️</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Image Page Content ── -->
+<main class="image-page-wrapper">
+
+  <!-- Breadcrumb -->
+  <nav aria-label="Breadcrumb" style="margin-bottom: 1.5rem;">
+    <ol style="display:flex; gap:.5rem; font-size:.85rem; color: var(--clr-text-muted); list-style:none;">
+      <li><a href="/" style="color: var(--clr-text-secondary);">Home</a></li>
+      <li aria-hidden="true">›</li>
+      <li aria-current="page" style="color: var(--clr-primary-light);">{{ slug }}</li>
+    </ol>
+  </nav>
+
+  <!-- Image viewer card -->
+  <article class="image-viewer" aria-label="Image preview">
+    <img
+      src="{{ direct_url }}"
+      alt="{{ image.filename }}"
+      loading="eager"
+      decoding="async"
+    />
+    <div class="image-meta-bar">
+      <div>
+        <p class="image-filename" title="{{ image.filename }}">{{ image.filename }}</p>
+        <p style="font-size:.8rem; color:var(--clr-text-muted); margin-top:.25rem;">
+          {{ created_str }}
+        </p>
+      </div>
+      <div class="meta-badges" role="list" aria-label="Image metadata">
+        <span class="meta-badge" role="listitem">{{ size_human }}</span>
+        <span class="meta-badge" role="listitem">{{ image.mime_type }}</span>
+        <span class="meta-badge view-counter" role="listitem" aria-label="{{ image.views }} views">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          {{ image.views }} views
+        </span>
+      </div>
+    </div>
+  </article>
+
+  <!-- Share / Link panel -->
+  <section class="share-panel" aria-label="Share and link options">
+    <h2>Share &amp; Links</h2>
+
+    <!-- Page URL -->
+    <div class="link-row">
+      <span class="link-label">Page</span>
+      <input
+        class="link-value"
+        id="page-url"
+        type="text"
+        value="{{ page_url }}"
+        readonly
+        aria-label="Page URL"
+      />
+      <button class="copy-btn" data-copy-from="page-url" aria-label="Copy page URL">Copy</button>
+    </div>
+
+    <!-- Direct image URL -->
+    <div class="link-row">
+      <span class="link-label">Direct</span>
+      <input
+        class="link-value"
+        id="direct-url"
+        type="text"
+        value="{{ direct_url }}"
+        readonly
+        aria-label="Direct image URL"
+      />
+      <button class="copy-btn" data-copy-from="direct-url" aria-label="Copy direct URL">Copy</button>
+    </div>
+
+    <!-- HTML embed code -->
+    <div class="link-row">
+      <span class="link-label">HTML</span>
+      <input
+        class="link-value"
+        id="html-code"
+        type="text"
+        value='&lt;img src=&quot;{{ direct_url }}&quot; alt=&quot;{{ image.filename }}&quot; /&gt;'
+        readonly
+        aria-label="HTML embed code"
+      />
+      <button class="copy-btn" data-copy-value='<img src="{{ direct_url }}" alt="{{ image.filename }}" />' aria-label="Copy HTML code">Copy</button>
+    </div>
+
+    <!-- Markdown embed -->
+    <div class="link-row">
+      <span class="link-label">MD</span>
+      <input
+        class="link-value"
+        id="md-code"
+        type="text"
+        value="![{{ image.filename }}]({{ direct_url }})"
+        readonly
+        aria-label="Markdown embed code"
+      />
+      <button class="copy-btn" data-copy-value="![{{ image.filename }}]({{ direct_url }})" aria-label="Copy Markdown code">Copy</button>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="share-actions">
+      <a
+        href="{{ download_url }}"
+        class="btn btn-primary"
+        download="{{ image.filename }}"
+        aria-label="Download image"
+      >
+        ⬇ Download
+      </a>
+      <button
+        class="btn btn-secondary"
+        data-copy-value="{{ page_url }}"
+        aria-label="Copy page link"
+      >
+        🔗 Copy Link
+      </button>
+      <button
+        class="btn btn-secondary"
+        data-copy-value="{{ direct_url }}"
+        aria-label="Copy direct image URL"
+      >
+        📋 Copy Direct
+      </button>
+      <a href="/" class="btn btn-ghost" aria-label="Upload another image">↑ Upload Another</a>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── Footer ── -->
+<footer class="footer" role="contentinfo">
+  <div class="container">
+    <p>
+      &copy; 2025 <a href="/">Dhyey Space</a> ·
+      Powered by <span style="color: var(--clr-primary-light);">FastAPI</span> &amp; ❤️
+    </p>
+  </div>
+</footer>
+
+<script src="/static/js/image.js"></script>
+</body>
+</html>

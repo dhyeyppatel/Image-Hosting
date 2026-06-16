@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 — Page Not Found · Dhyey Space</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<nav class="navbar" role="navigation" aria-label="Main navigation">
+  <div class="container navbar-inner">
+    <a href="/" class="logo" aria-label="Dhyey Space home">
+      <div class="logo-icon" aria-hidden="true">🚀</div>
+      <span class="logo-text">Dhyey <span>Space</span></span>
+    </a>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">☀️</button>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <div class="error-page" role="main">
+    <p class="error-code" aria-label="Error 404">404</p>
+    <h1 class="error-title">Image not found</h1>
+    <p class="error-desc">
+      This image may have been deleted or the link is incorrect.<br />
+      Double-check the URL and try again.
+    </p>
+    <a href="/" class="btn btn-primary btn-lg">↑ Upload an Image</a>
+  </div>
+</main>
+
+<footer class="footer" role="contentinfo">
+  <div class="container">
+    <p>&copy; 2025 <a href="/">Dhyey Space</a></p>
+  </div>
+</footer>
+
+<script>
+  const THEME_KEY = "dhyey_theme";
+  const saved = localStorage.getItem(THEME_KEY);
+  const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  const theme = saved || preferred;
+  document.documentElement.setAttribute("data-theme", theme);
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    btn.textContent = theme === "dark" ? "☀️" : "🌙";
+    btn.addEventListener("click", () => {
+      const cur = document.documentElement.getAttribute("data-theme");
+      const next = cur === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem(THEME_KEY, next);
+      btn.textContent = next === "dark" ? "☀️" : "🌙";
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- SEO -->
+  <title>Dhyey Space — Free Image Hosting</title>
+  <meta name="description" content="Upload and share images instantly with Dhyey Space. Free, fast, and reliable image hosting powered by a modern cloud stack." />
+  <meta name="keywords" content="image hosting, free image upload, share images, dhyey space" />
+  <link rel="canonical" href="{{ base_url }}/" />
+
+  <!-- OpenGraph -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:title"       content="Dhyey Space — Free Image Hosting" />
+  <meta property="og:description" content="Upload and share images instantly. Free, fast, permanent." />
+  <meta property="og:url"         content="{{ base_url }}/" />
+  <meta property="og:site_name"   content="Dhyey Space" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card"        content="summary" />
+  <meta name="twitter:title"       content="Dhyey Space — Free Image Hosting" />
+  <meta name="twitter:description" content="Upload and share images instantly. Free, fast, permanent." />
+
+  <!-- Favicon (emoji) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script>
+    window.DHYEY_MAX_SIZE_MB = {{ max_upload_size_mb }};
+  </script>
+</head>
+<body>
+
+<!-- Background layers -->
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+<!-- ── Navigation ── -->
+<nav class="navbar" role="navigation" aria-label="Main navigation">
+  <div class="container navbar-inner">
+    <a href="/" class="logo" aria-label="Dhyey Space home">
+      <div class="logo-icon" aria-hidden="true">🚀</div>
+      <span class="logo-text">Dhyey <span>Space</span></span>
+    </a>
+    <div class="nav-actions">
+      <button
+        class="theme-toggle"
+        id="theme-toggle"
+        aria-label="Toggle dark/light mode"
+        title="Toggle theme"
+      >☀️</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<main>
+  <section class="container" style="padding-top: 5rem; padding-bottom: 2rem;">
+    <div style="max-width: 640px; margin: 0 auto; text-align: center;">
+      <div class="hero-badge" aria-label="Live service indicator">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        Free · Fast · Permanent
+      </div>
+      <h1 class="hero-title">
+        Host images<br />
+        <span class="gradient-text">the right way</span>
+      </h1>
+      <p class="hero-subtitle">
+        Upload once, share everywhere. Beautiful links like
+        <code style="font-family: var(--font-mono); color: var(--clr-primary-light); font-size: 0.9em;">dhyey.space/i/silent-bucket</code>
+        — no accounts, no nonsense.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Upload Card ── -->
+  <section class="container" style="max-width: 680px; margin: 0 auto; padding-bottom: 2rem;">
+    <div class="card-glass" style="padding: 2rem;">
+      <!-- Hidden file input -->
+      <input
+        type="file"
+        id="file-input"
+        class="sr-only"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        aria-label="Choose image file"
+      />
+
+      <!-- Drop zone -->
+      <div class="upload-zone" id="upload-zone" role="button" tabindex="0"
+           aria-label="Upload zone — click or drag an image here"
+           onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-input').click()">
+        <div class="upload-zone-content">
+          <div class="upload-icon" aria-hidden="true">📸</div>
+          <p class="upload-title">Drop your image here</p>
+          <p class="upload-subtitle">
+            or <strong>click to browse</strong> · or <strong>paste</strong> from clipboard
+          </p>
+          <button
+            class="btn btn-primary"
+            id="upload-btn"
+            onclick="event.stopPropagation(); document.getElementById('file-input').click()"
+          >
+            ↑ Upload Image
+          </button>
+          <div class="upload-formats" aria-label="Supported formats">
+            <span class="format-badge">JPG</span>
+            <span class="format-badge">PNG</span>
+            <span class="format-badge">WEBP</span>
+            <span class="format-badge">GIF</span>
+            <span class="format-badge">Max {{ max_upload_size_mb }} MB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-container" id="progress-container" role="progressbar" aria-label="Upload progress">
+        <div class="progress-label">
+          <span id="progress-text">Uploading…</span>
+          <span id="progress-pct"></span>
+        </div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill indeterminate" id="progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- Result panel -->
+      <div class="result-panel" id="result-panel" aria-live="polite">
+        <img class="result-image-preview" id="result-preview" alt="Uploaded image preview" />
+
+        <!-- Page URL -->
+        <div class="link-row">
+          <span class="link-label">Page</span>
+          <input class="link-value" id="page-url-input" type="text" readonly aria-label="Page URL" />
+          <button class="copy-btn" data-copy-from="page-url-input" aria-label="Copy page URL">Copy</button>
+        </div>
+
+        <!-- Direct URL -->
+        <div class="link-row">
+          <span class="link-label">Direct</span>
+          <input class="link-value" id="direct-url-input" type="text" readonly aria-label="Direct image URL" />
+          <button class="copy-btn" data-copy-from="direct-url-input" aria-label="Copy direct URL">Copy</button>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap;">
+          <a class="btn btn-primary" id="view-page-btn" href="#" target="_blank" rel="noopener">
+            🔗 View Page
+          </a>
+          <button class="btn btn-secondary" onclick="resetUpload()">
+            ↑ Upload Another
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Features ── -->
+  <section class="container" aria-label="Features">
+    <div class="features-grid">
+      <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">⚡</div>
+        <h2 class="feature-title">Lightning Fast</h2>
+        <p class="feature-desc">Images served from our global CDN with edge caching.</p>
+      </article>
+      <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">🔗</div>
+        <h2 class="feature-title">Human Links</h2>
+        <p class="feature-desc">Beautiful readable slugs like <code style="font-size:.8em">silent-bucket</code> instead of random strings.</p>
+      </article>
+      <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">🔒</div>
+        <h2 class="feature-title">Private Storage</h2>
+        <p class="feature-desc">Images stored securely — Telegram credentials never exposed.</p>
+      </article>
+      <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">📱</div>
+        <h2 class="feature-title">Share Anywhere</h2>
+        <p class="feature-desc">Works in Discord, Telegram, Twitter, Markdown and HTML.</p>
+      </article>
+      <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">🌙</div>
+        <h2 class="feature-title">Dark Mode</h2>
+        <p class="feature-desc">Beautiful in dark and light. Follows your system preference.</p>
+      </article>
+      <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">🆓</div>
+        <h2 class="feature-title">Forever Free</h2>
+        <p class="feature-desc">No accounts, no limits on views, no expiry dates.</p>
+      </article>
+    </div>
+  </section>
+</main>
+
+<!-- ── Footer ── -->
+<footer class="footer" role="contentinfo">
+  <div class="container">
+    <p>
+      &copy; 2025 <a href="/">Dhyey Space</a> ·
+      Powered by <span style="color: var(--clr-primary-light);">FastAPI</span> &amp; ❤️
+    </p>
+  </div>
+</footer>
+
+<script src="/static/js/upload.js"></script>
+<script>
+  function resetUpload() {
+    document.getElementById("result-panel").classList.remove("visible");
+    document.getElementById("progress-container").classList.remove("visible");
+    document.getElementById("progress-fill").style.width = "0%";
+  }
+</script>
+</body>
+</html>

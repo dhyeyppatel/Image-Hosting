@@ -2,7 +2,7 @@
 
 > A production-ready, open-source image hosting platform built with **FastAPI**, **MongoDB Atlas**, and **Telegram** as the storage backend.
 
-**Live demo:** https://dhyey.space
+**Live demo:** [https://image.dhyey.space](https://eligible-kissie-dhyey-bd978350.koyeb.app/)
 
 ---
 

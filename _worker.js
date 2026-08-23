@@ -11,7 +11,7 @@
     const TG_CHAT_ID = env.TG_CHAT_ID;
     const maxSizeMB = env.MAX_SIZE_MB ? parseInt(env.MAX_SIZE_MB, 10) : 20;
     const maxSize = maxSizeMB * 1024 * 1024;
-    const Creator = 'https://t.me/Ashlynn_Repository';
+    const Creator = 'https://t.me/Imagehostssbot';
 
     switch (pathname) {
       case '/':
@@ -44,8 +44,8 @@ async function serveDocumentationPage() {
   <meta name="keywords" content="Commonthread, API, image hosting, video hosting, Media hosting, Telegram bot, cloud storage">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>API Documentation - Commonthread</title>
-  <link rel="manifest" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Files/manifest.json">
-  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
+  <link rel="manifest" href="https://raw.githubusercontent.com/Itz-Commonthread/TG-MediaHost-Bot/main/Files/manifest.json">
+  <link rel="icon" type="image/png" href="https://media.dhyey.cc/1787450204076.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"></noscript>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -90,7 +90,7 @@ async function serveDocumentationPage() {
   <!-- Top Nav -->
   <header class="fixed inset-x-0 top-0 z-50">
     <nav id="top-nav" class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6 backdrop-blur-xl border-b border-white/10 transition-all duration-300" style="background: linear-gradient(to bottom, rgba(10,10,10,0.72), rgba(10,10,10,0.55));">
-      <a href="https://ar-hosting.pages.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
+      <a href="https://media.dhyey.cc/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
         <div class="relative">
           <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="Commonthread Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
           <div class="absolute -inset-2 rounded-full opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" style="background: radial-gradient(circle, rgba(251,146,60,0.45), transparent 60%);">
@@ -127,7 +127,7 @@ async function serveDocumentationPage() {
     <div class="relative mx-auto max-w-sm px-4 pt-20">
       <div id="mobile-panel" class="rounded-2xl border border-white/10 bg-zinc-950/80 ring-1 ring-white/10 divide-y divide-white/10 opacity-0 translate-y-2 transition-all duration-300 shadow-2xl shadow-black/60" style="transform: translateZ(0);">
         <div class="p-4">
-          <a href="https://ar-hosting.pages.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
+          <a href="https://media.dhyey.cc/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
             <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="Commonthread Logo" class="h-8 w-8 rounded-full ring-1 ring-white/10">
             <span class="text-base font-semibold tracking-tight bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
               Commonthread
@@ -162,7 +162,7 @@ async function serveDocumentationPage() {
     <section class="mx-auto max-w-4xl px-4 text-center md:px-6" data-reveal="">
       <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-orange-200 ring-1 ring-orange-300/20 bg-orange-500/10">
         <span class="iconify h-3.5 w-3.5" data-icon="lucide:sparkles" data-inline="false"></span>
-        <span>Ashlynn Repository</span>
+        <span>Commonthread</span>
       </div>
 
       <h1 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
@@ -259,7 +259,7 @@ async function serveDocumentationPage() {
           </div>
 
           <p class="mt-4 text-sm text-zinc-300 sm:text-base">
-            This documentation provides a comprehensive guide on how to use the <span class="font-medium">Ashlynn Repository API</span> to upload media files to the platform.
+            This documentation provides a comprehensive guide on how to use the <span class="font-medium">Commonthread API</span> to upload media files to the platform.
           </p>
 
           <!-- Endpoints -->
@@ -300,11 +300,11 @@ async function serveDocumentationPage() {
               <ul class="mt-1 space-y-2 text-zinc-300">
                 <li class="text-sm">
                   <span class="font-medium text-white">POST:</span>
-                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://ar-hosting.pages.dev/upload</code>
+                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://media.dhyey.cc/upload</code>
                 </li>
                 <li class="text-sm">
                   <span class="font-medium text-white">GET:</span>
-                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://ar-hosting.pages.dev/hosturl?url=[media_url]</code>
+                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://media.dhyey.cc/hosturl?url=[media_url]</code>
                 </li>
               </ul>
             </div>
@@ -355,7 +355,7 @@ async function serveDocumentationPage() {
 
               <h4 class="mt-6 text-base font-medium text-white">Usage Example (cURL)</h4>
               <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-code">curl -X POST https://ar-hosting.pages.dev/upload \
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-code">curl -X POST https://media.dhyey.cc/upload \
   -H "Content-Type: multipart/form-data" \
   -F "file=@path/to/your/file.jpg"</code></pre>
                 <button data-copy="#bash-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
@@ -370,7 +370,7 @@ async function serveDocumentationPage() {
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
 
-  fetch('https://ar-hosting.pages.dev/upload', {
+  fetch('https://media.dhyey.cc/upload', {
     method: 'POST',
     body: formData
   })
@@ -429,7 +429,7 @@ async function serveDocumentationPage() {
 
               <h4 class="mt-6 text-base font-medium text-white">Usage Example</h4>
               <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-get-code">https://ar-hosting.pages.dev/hosturl?url=https://example.com/path/to/media.jpg</code></pre>
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-get-code">https://media.dhyey.cc/hosturl?url=https://example.com/path/to/media.jpg</code></pre>
                 <button data-copy="#bash-get-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
                   <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
                   Copy
@@ -453,13 +453,13 @@ async function serveDocumentationPage() {
               <p class="mt-2 text-sm text-zinc-300 sm:text-base">A successful upload will return a JSON object with the following details:</p>
               <div class="relative mt-2">
                 <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="success-response-code">{
-    "data": "https://ar-hosting.pages.dev/1753020712833.png",
-    "url": "https://ar-hosting.pages.dev/1753020712833.png",
+    "data": "https://media.dhyey.cc/1753020712833.png",
+    "url": "https://media.dhyey.cc/1753020712833.png",
     "filename": "2nNV2I4.png",
     "size": 83638,
     "uploaded_on": "2025-07-20T14:11:52.833Z",
     "media_type": "image/png",
-    "creator": "https://t.me/Ashlynn_Repository"
+    "creator": "https://t.me/Imagehostssbot"
   }</code></pre>
                 <button data-copy="#success-response-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
                   <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
@@ -572,9 +572,9 @@ async function serveDocumentationPage() {
         <div class="p-6 sm:p-8">
           <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">About Us</h2>
           <div class="mt-3 space-y-3 text-sm text-zinc-300 sm:text-base">
-            <p>Welcome to <strong class="text-white">Commonthread</strong> — your trusted platform for free image, video, and general media hosting. Designed with an emphasis on <strong class="text-white">simplicity, speed, and security</strong>, Commonthread offers a seamless and efficient experience for uploading and sharing your digital content. Developed by <strong class="text-white">Ashlynn Repository</strong>, our service is built on a foundation of robust privacy protections to ensure your data remains safe and secure.</p>
+            <p>Welcome to <strong class="text-white">Commonthread</strong> — your trusted platform for free image, video, and general media hosting. Designed with an emphasis on <strong class="text-white">simplicity, speed, and security</strong>, Commonthread offers a seamless and efficient experience for uploading and sharing your digital content. Developed by <strong class="text-white">Commonthread</strong>, our service is built on a foundation of robust privacy protections to ensure your data remains safe and secure.</p>
             <p>Our platform leverages Telegram's cutting-edge cloud storage infrastructure, providing you with reliable and easily accessible media storage, whenever and wherever you need it.</p>
-            <p><strong class="text-white">About Ashlynn Repository:</strong> Ashlynn Repository is a dynamic Telegram channel managed by Aarabh (known as itz_ashlynn), who specializes in developing advanced Telegram bots, powerful APIs, and innovative web applications. You can explore all the latest tools, projects, and updates directly on their Telegram channel: <a href="https://t.me/Ashlynn_Repository" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">Ashlynn Repository</a>.</p>
+            <p><strong class="text-white">About Commonthread:</strong> Commonthread is a dynamic Telegram channel managed by Aarabh (known as Commonthread Team), who specializes in developing advanced Telegram bots, powerful APIs, and innovative web applications. You can explore all the latest tools, projects, and updates directly on their Telegram channel: <a href="https://t.me/Imagehostssbot" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">Commonthread</a>.</p>
             <p><strong class="text-white">Disclaimer:</strong> Commonthread is an independent project created solely for educational and demonstrative purposes and is not affiliated with or endorsed by Telegram. Users are solely responsible for the content they upload; Commonthread does not claim any rights over user-uploaded media. By using our platform, users agree that they retain all responsibility for compliance with relevant copyright laws and regulations.</p>
           </div>
         </div>
@@ -588,17 +588,17 @@ async function serveDocumentationPage() {
       <div class="flex flex-col items-center gap-3">
         <p class="text-sm text-zinc-400 text-center">
           © 2025 COMMONTHREAD. All rights reserved. Developed by
-          <a href="https://t.me/Ashlynn_Repository" target="_blank" class="text-orange-200 hover:text-orange-100 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded">
-            Ashlynn Repository
+          <a href="https://t.me/Imagehostssbot" target="_blank" class="text-orange-200 hover:text-orange-100 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded">
+            Commonthread
           </a>.
         </p>
 
         <div class="inline-flex items-center gap-4">
-          <a href="https://t.me/Ashlynn_Repository" target="_blank" aria-label="Telegram Channel" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
+          <a href="https://t.me/Imagehostssbot" target="_blank" aria-label="Telegram Channel" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
             <span class="iconify h-5 w-5" data-icon="lucide:send" data-inline="false"></span>
           </a>
 
-          <a href="https://github.com/itz-ashlynn" target="_blank" aria-label="GitHub Profile" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
+          <a href="https://media.dhyey.cc" target="_blank" aria-label="GitHub Profile" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
             <span class="iconify h-5 w-5" data-icon="lucide:github" data-inline="false"></span>
           </a>
         </div>
@@ -857,20 +857,20 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="description" content="Cloudflare-powered media hosting for images, videos, audio, and documents (up to 20MB). Secure and scalable storage using Telegram as backend.">
     <meta name="keywords" content="Cloudflare Hosting, Media Hosting, Cloudflare Workers, Image Hosting, Video Hosting, TG BOT, Commonthread">
-    <meta name="author" content="Ashlynn Repository">
+    <meta name="author" content="Commonthread">
     <meta name="robots" content="index, follow">
-    <meta name="canonical" content="https://ar-hosting.pages.dev/">
+    <meta name="canonical" content="https://media.dhyey.cc/">
     <meta property="og:title" content="Commonthread - Fast & Secure Media Hosting">
     <meta property="og:description" content="Host images, videos, audio, and docs securely via Cloudflare pages with Telegram storage backend. Scalable, fast, and reliable.">
-    <meta property="og:image" content="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
-    <meta property="og:url" content="https://ar-hosting.pages.dev/">
+    <meta property="og:image" content="https://media.dhyey.cc/1787450204076.png">
+    <meta property="og:url" content="https://media.dhyey.cc/">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Commonthread - Fast & Secure Media Hosting">
     <meta name="twitter:description" content="Host images, videos, audio, and docs securely via Cloudflare pages with Telegram storage backend. Scalable, fast, and reliable.">
-    <meta name="twitter:image" content="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
+    <meta name="twitter:image" content="https://media.dhyey.cc/1787450204076.png">
     <title>Commonthread - Fast & Secure Media Hosting</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png" type="image/x-icon">
+    <link rel="icon" href="https://media.dhyey.cc/1787450204076.png" type="image/x-icon">
   
     <!-- Performance hints -->
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
@@ -892,7 +892,7 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
     <script src="https://unpkg.com/lucide@latest"></script>
   
     <!-- Manifest -->
-    <link rel="manifest" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Files/manifest.json">
+    <link rel="manifest" href="https://raw.githubusercontent.com/Itz-Commonthread/TG-MediaHost-Bot/main/Files/manifest.json">
   
     <!-- Inline base styles and variables -->
     <style>
@@ -1260,10 +1260,10 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
         <!-- Footer Links -->
         <footer class="pt-6 mt-6 border-t divider text-center animate-fadeIn" style="animation-delay: 0.2s;">
           <p class="text-slate-400 dark-mode:text-slate-500 text-sm mb-1">Go To -
-            <a class="text-indigo-300 dark-mode:text-indigo-500 hover:text-indigo-200 dark-mode:hover:text-indigo-400 underline-offset-4 hover:underline transition-colors duration-300" href="https://ar-hosting.pages.dev/docs" target="_blank" rel="noopener noreferrer">About | API Page</a>
+            <a class="text-indigo-300 dark-mode:text-indigo-500 hover:text-indigo-200 dark-mode:hover:text-indigo-400 underline-offset-4 hover:underline transition-colors duration-300" href="https://media.dhyey.cc/docs" target="_blank" rel="noopener noreferrer">About | API Page</a>
           </p>
           <p class="text-slate-400 dark-mode:text-slate-500 text-sm">Made with ❤️ by -
-            <a class="text-indigo-300 dark-mode:text-indigo-500 hover:text-indigo-200 dark-mode:hover:text-indigo-400 underline-offset-4 hover:underline transition-colors duration-300" href="https://t.me/Ashlynn_Repository" target="_blank" rel="noopener noreferrer">Ashlynn Repository</a>
+            <a class="text-indigo-300 dark-mode:text-indigo-500 hover:text-indigo-200 dark-mode:hover:text-indigo-400 underline-offset-4 hover:underline transition-colors duration-300" href="https://t.me/Imagehostssbot" target="_blank" rel="noopener noreferrer">Commonthread</a>
           </p>
         </footer>
       </section>
@@ -1322,7 +1322,7 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
     <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.27/bundled/lenis.min.js"></script>
   
     <!-- Contact form -->
-    <script src="https://cdn.jsdelivr.net/gh/Itz-Ashlynn/contact@master/src/contact.min.js"
+    <script src="https://cdn.jsdelivr.net/gh/Itz-Commonthread/contact@master/src/contact.min.js"
       id="contactform"
       error_text=""
       success_text=""
@@ -1342,11 +1342,11 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
       try { lucide.createIcons({ attrs: { 'stroke-width': 1.5 } }); } catch (e) {}
   
       const backgroundImages = [
-        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/1.webp",
-        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/2.webp",
-        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/3.webp",
-        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/4.webp",
-        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/5.webp"
+        "https://raw.githubusercontent.com/Itz-Commonthread/TG-MediaHost-Bot/main/Images/1.webp",
+        "https://raw.githubusercontent.com/Itz-Commonthread/TG-MediaHost-Bot/main/Images/2.webp",
+        "https://raw.githubusercontent.com/Itz-Commonthread/TG-MediaHost-Bot/main/Images/3.webp",
+        "https://raw.githubusercontent.com/Itz-Commonthread/TG-MediaHost-Bot/main/Images/4.webp",
+        "https://raw.githubusercontent.com/Itz-Commonthread/TG-MediaHost-Bot/main/Images/5.webp"
       ];
   
       function setBackgroundImages() {
@@ -2489,10 +2489,10 @@ async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASS
     const file = formData.get('file');
     if (!file) throw new Error('Missing files');
     if (file.size > maxSize) {
-      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
     }
     if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
     }
     const uploadFormData = new FormData();
     uploadFormData.append("chat_id", TG_CHAT_ID);
@@ -2537,34 +2537,34 @@ async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASS
       size: file.size,
       uploaded_on: new Date(timestamp).toISOString(),
       media_type: file.type,
-      creator: 'https://t.me/Ashlynn_Repository'
+      creator: 'https://t.me/Imagehostssbot'
     };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
   } catch (error) {
     console.error('Internal Server Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
   }
 }
 
 async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
   try {
     if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
     }
     const url = new URL(request.url);
     const fileUrl = url.searchParams.get('url');
     if (!fileUrl) {
-      return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+      return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
     }
     const fileResponse = await fetch(fileUrl);
     if (!fileResponse.ok) {
-      return new Response(JSON.stringify({ error: 'Failed to download file from URL' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+      return new Response(JSON.stringify({ error: 'Failed to download file from URL' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
     }
     const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
     const fileName = new URL(fileUrl).pathname.split('/').pop() || 'downloaded-file';
     const fileBuffer = await fileResponse.arrayBuffer();
     if (fileBuffer.byteLength > maxSize) {
-      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
     }
     const file = new File([fileBuffer], fileName, { type: contentType });
     const uploadFormData = new FormData();
@@ -2611,12 +2611,12 @@ async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, P
       size: fileBuffer.byteLength,
       uploaded_on: new Date(timestamp).toISOString(),
       media_type: contentType,
-      creator: 'https://t.me/Ashlynn_Repository'
+      creator: 'https://t.me/Imagehostssbot'
     };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
   } catch (error) {
     console.error('Internal Server Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
   }
 }
 
@@ -2635,7 +2635,7 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     <meta name="robots" content="noindex">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>404 - Page Not Found | Commonthread</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
+    <link rel="icon" href="https://media.dhyey.cc/1787450204076.png">
   
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"></noscript>
@@ -2663,7 +2663,7 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     <header class="fixed inset-x-0 top-0 z-50">
       <nav id="top-nav" class="mx-auto flex items-center justify-between px-4 md:px-6 py-3 backdrop-blur-xl bg-black/60 border-b border-white/10 transition-all duration-300">
         <a href="/" class="group inline-flex items-center gap-3">
-          <img src="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png" alt="Commonthread" class="h-9 w-9 rounded-full ring-1 ring-white/10">
+          <img src="https://media.dhyey.cc/1787450204076.png" alt="Commonthread" class="h-9 w-9 rounded-full ring-1 ring-white/10">
           <span class="text-lg font-semibold tracking-tight text-transparent bg-clip-text" style="background-image: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1), rgba(244,63,94,0.95));">Commonthread</span>
         </a>
   
@@ -2781,7 +2781,7 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
                       <p class="text-sm font-medium text-zinc-50">Need help?</p>
                       <p class="text-sm text-zinc-400">
                         Visit our
-                        <a href="https://t.me/Ashlynn_Repository" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">TG Channel</a>
+                        <a href="https://t.me/Imagehostssbot" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">TG Channel</a>
                         for assistance.
                       </p>
                     </div>

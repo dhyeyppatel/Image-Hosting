@@ -1533,7 +1533,16 @@ async function handleTelegramWebhook(request, DATABASE, domain, TG_BOT_TOKEN, TG
       `🌐 Powered by [Commonthread](https://${domain})`;
 
     await tgSendMessage(tgApiBase, chatId, replyText, message.message_id);
-
+return new Response(JSON.stringify({
+  success: true,
+  url: cdnUrl,
+  filename: fileName
+}), {
+  status: 200,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
   } catch (err) {
     console.error('Telegram webhook upload error:', err);
     await tgSendMessage(tgApiBase, chatId,

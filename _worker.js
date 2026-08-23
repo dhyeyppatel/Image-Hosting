@@ -6,7 +6,7 @@
     const USERNAME = env.USERNAME;
     const PASSWORD = env.PASSWORD;
     const adminPath = 'admin';
-    const enableAuth = env.ENABLE_AUTH === 'true';
+    const enableAuth = false; // Forced to false by user request
     const TG_BOT_TOKEN = env.TG_BOT_TOKEN;
     const TG_CHAT_ID = env.TG_CHAT_ID;
     const maxSizeMB = env.MAX_SIZE_MB ? parseInt(env.MAX_SIZE_MB, 10) : 20;

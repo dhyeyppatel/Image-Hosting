@@ -1,4 +1,4 @@
-name = "commonthread"
+name = "image-hosting"
 main = "_worker.js"
 compatibility_date = "2026-08-23"
 
@@ -6,7 +6,7 @@ compatibility_date = "2026-08-23"
 [[d1_databases]]
 binding = "DATABASE"
 database_name = "commonthread_db"
-database_id = "<YOUR_D1_DATABASE_ID>"
+database_id = "73dc9182-592c-4623-b301-d2d32a7f92ad"
 
 # Environment Variables
 [vars]

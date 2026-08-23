@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     const domain = env.DOMAIN;
@@ -40,10 +40,10 @@ async function serveDocumentationPage() {
   const html = `
   <html lang="en"><head>
   <meta charset="UTF-8">
-  <meta name="description" content="AR Hosting API Documentation - Free image and video hosting service with Telegram integration">
-  <meta name="keywords" content="AR Hosting, API, image hosting, video hosting, Media hosting, Telegram bot, cloud storage">
+  <meta name="description" content="Commonthread API Documentation - Free image and video hosting service with Telegram integration">
+  <meta name="keywords" content="Commonthread, API, image hosting, video hosting, Media hosting, Telegram bot, cloud storage">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>API Documentation - AR Hosting</title>
+  <title>API Documentation - Commonthread</title>
   <link rel="manifest" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Files/manifest.json">
   <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
@@ -71,7 +71,7 @@ async function serveDocumentationPage() {
   <div id="page-loader" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md opacity-100 transition-opacity duration-500">
     <div class="group inline-flex items-center gap-3 rounded-2xl ring-1 ring-white/10 bg-zinc-950/70 px-4 py-3 shadow-2xl shadow-black/60" style="transform: translateZ(0);">
       <div class="relative">
-        <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="AR Hosting Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
+        <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="Commonthread Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
         <div class="absolute -inset-2 rounded-full opacity-70 blur-xl" style="background: radial-gradient(circle, rgba(251,146,60,0.35), transparent 60%);">
         </div>
       </div>
@@ -92,12 +92,12 @@ async function serveDocumentationPage() {
     <nav id="top-nav" class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6 backdrop-blur-xl border-b border-white/10 transition-all duration-300" style="background: linear-gradient(to bottom, rgba(10,10,10,0.72), rgba(10,10,10,0.55));">
       <a href="https://ar-hosting.pages.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
         <div class="relative">
-          <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="AR Hosting Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
+          <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="Commonthread Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
           <div class="absolute -inset-2 rounded-full opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" style="background: radial-gradient(circle, rgba(251,146,60,0.45), transparent 60%);">
           </div>
         </div>
         <span class="text-lg font-semibold tracking-tight bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
-          AR Hosting
+          Commonthread
         </span>
       </a>
 
@@ -128,9 +128,9 @@ async function serveDocumentationPage() {
       <div id="mobile-panel" class="rounded-2xl border border-white/10 bg-zinc-950/80 ring-1 ring-white/10 divide-y divide-white/10 opacity-0 translate-y-2 transition-all duration-300 shadow-2xl shadow-black/60" style="transform: translateZ(0);">
         <div class="p-4">
           <a href="https://ar-hosting.pages.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
-            <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="AR Hosting Logo" class="h-8 w-8 rounded-full ring-1 ring-white/10">
+            <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="Commonthread Logo" class="h-8 w-8 rounded-full ring-1 ring-white/10">
             <span class="text-base font-semibold tracking-tight bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
-              AR Hosting
+              Commonthread
             </span>
           </a>
         </div>
@@ -166,7 +166,7 @@ async function serveDocumentationPage() {
       </div>
 
       <h1 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
-        AR Hosting API Documentation
+        Commonthread API Documentation
       </h1>
 
       <p class="mt-4 text-sm text-zinc-400 sm:text-base">
@@ -521,7 +521,7 @@ async function serveDocumentationPage() {
         <div class="p-6 sm:p-8">
           <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">Telegram Bot Integration</h2>
           <p class="mt-3 text-sm text-zinc-300 sm:text-base">
-            Now you can directly upload media to AR Hosting using our dedicated Telegram bot
+            Now you can directly upload media to Commonthread using our dedicated Telegram bot
             <strong><a href="https://t.me/AR_UrlUploaderBot" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">@AR_UrlUploaderBot</a></strong>.
             This offers a convenient way to host files without needing to interact directly with the API.
           </p>
@@ -531,7 +531,7 @@ async function serveDocumentationPage() {
             <li>Start a chat with <a href="https://t.me/AR_UrlUploaderBot" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">@AR_UrlUploaderBot</a> on Telegram.</li>
             <li><strong class="text-white">Direct File Upload:</strong> Send any image, video, or media file directly to the bot.</li>
             <li><strong class="text-white">URL Upload:</strong> Alternatively, send a URL containing a media file. Our bot will automatically download and upload it for you.</li>
-            <li>The bot will process your request and return the direct AR Hosting URL for your uploaded media.</li>
+            <li>The bot will process your request and return the direct Commonthread URL for your uploaded media.</li>
           </ol>
 
           <h3 class="mt-6 text-lg font-medium text-amber-200">Bot Commands</h3>
@@ -572,10 +572,10 @@ async function serveDocumentationPage() {
         <div class="p-6 sm:p-8">
           <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">About Us</h2>
           <div class="mt-3 space-y-3 text-sm text-zinc-300 sm:text-base">
-            <p>Welcome to <strong class="text-white">AR Hosting</strong> — your trusted platform for free image, video, and general media hosting. Designed with an emphasis on <strong class="text-white">simplicity, speed, and security</strong>, AR Hosting offers a seamless and efficient experience for uploading and sharing your digital content. Developed by <strong class="text-white">Ashlynn Repository</strong>, our service is built on a foundation of robust privacy protections to ensure your data remains safe and secure.</p>
+            <p>Welcome to <strong class="text-white">Commonthread</strong> — your trusted platform for free image, video, and general media hosting. Designed with an emphasis on <strong class="text-white">simplicity, speed, and security</strong>, Commonthread offers a seamless and efficient experience for uploading and sharing your digital content. Developed by <strong class="text-white">Ashlynn Repository</strong>, our service is built on a foundation of robust privacy protections to ensure your data remains safe and secure.</p>
             <p>Our platform leverages Telegram's cutting-edge cloud storage infrastructure, providing you with reliable and easily accessible media storage, whenever and wherever you need it.</p>
             <p><strong class="text-white">About Ashlynn Repository:</strong> Ashlynn Repository is a dynamic Telegram channel managed by Aarabh (known as itz_ashlynn), who specializes in developing advanced Telegram bots, powerful APIs, and innovative web applications. You can explore all the latest tools, projects, and updates directly on their Telegram channel: <a href="https://t.me/Ashlynn_Repository" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">Ashlynn Repository</a>.</p>
-            <p><strong class="text-white">Disclaimer:</strong> AR Hosting is an independent project created solely for educational and demonstrative purposes and is not affiliated with or endorsed by Telegram. Users are solely responsible for the content they upload; AR Hosting does not claim any rights over user-uploaded media. By using our platform, users agree that they retain all responsibility for compliance with relevant copyright laws and regulations.</p>
+            <p><strong class="text-white">Disclaimer:</strong> Commonthread is an independent project created solely for educational and demonstrative purposes and is not affiliated with or endorsed by Telegram. Users are solely responsible for the content they upload; Commonthread does not claim any rights over user-uploaded media. By using our platform, users agree that they retain all responsibility for compliance with relevant copyright laws and regulations.</p>
           </div>
         </div>
       </div>
@@ -587,7 +587,7 @@ async function serveDocumentationPage() {
     <div class="mx-auto max-w-7xl px-4 py-6 md:px-6">
       <div class="flex flex-col items-center gap-3">
         <p class="text-sm text-zinc-400 text-center">
-          © 2025 AR HOSTING. All rights reserved. Developed by
+          © 2025 COMMONTHREAD. All rights reserved. Developed by
           <a href="https://t.me/Ashlynn_Repository" target="_blank" class="text-orange-200 hover:text-orange-100 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded">
             Ashlynn Repository
           </a>.
@@ -856,20 +856,20 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="description" content="Cloudflare-powered media hosting for images, videos, audio, and documents (up to 20MB). Secure and scalable storage using Telegram as backend.">
-    <meta name="keywords" content="Cloudflare Hosting, Media Hosting, Cloudflare Workers, Image Hosting, Video Hosting, TG BOT, AR Hosting">
+    <meta name="keywords" content="Cloudflare Hosting, Media Hosting, Cloudflare Workers, Image Hosting, Video Hosting, TG BOT, Commonthread">
     <meta name="author" content="Ashlynn Repository">
     <meta name="robots" content="index, follow">
     <meta name="canonical" content="https://ar-hosting.pages.dev/">
-    <meta property="og:title" content="AR Hosting - Fast & Secure Media Hosting">
+    <meta property="og:title" content="Commonthread - Fast & Secure Media Hosting">
     <meta property="og:description" content="Host images, videos, audio, and docs securely via Cloudflare pages with Telegram storage backend. Scalable, fast, and reliable.">
     <meta property="og:image" content="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
     <meta property="og:url" content="https://ar-hosting.pages.dev/">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="AR Hosting - Fast & Secure Media Hosting">
+    <meta name="twitter:title" content="Commonthread - Fast & Secure Media Hosting">
     <meta name="twitter:description" content="Host images, videos, audio, and docs securely via Cloudflare pages with Telegram storage backend. Scalable, fast, and reliable.">
     <meta name="twitter:image" content="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
-    <title>AR Hosting - Fast & Secure Media Hosting</title>
+    <title>Commonthread - Fast & Secure Media Hosting</title>
     <link rel="icon" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png" type="image/x-icon">
   
     <!-- Performance hints -->
@@ -1197,7 +1197,7 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
             <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-500/15 border border-indigo-400/20 animate-pulse">
               <i class="fas fa-cloud-upload-alt text-indigo-300"></i>
             </span>
-            <span class="text-slate-100 dark-mode:text-slate-800">AR Hosting</span>
+            <span class="text-slate-100 dark-mode:text-slate-800">Commonthread</span>
           </h1>
           <div class="flex items-center gap-2 sm:hidden">
             <button id="viewCacheBtn_clone" class="hidden"></button>
@@ -2456,7 +2456,7 @@ async function generateAdminPage(DATABASE) {
       <p>✓ All files loaded</p>
     </div>
     <div class="footer">
-      AR Hosting Admin Panel
+      Commonthread Admin Panel
     </div>
   </body>
   </html>     
@@ -2634,7 +2634,7 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src * data: blob:; script-src 'self' https: 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; font-src 'self' https: data:; connect-src *; base-uri 'self'; object-src 'none'; form-action 'self'">
     <meta name="robots" content="noindex">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>404 - Page Not Found | AR Hosting</title>
+    <title>404 - Page Not Found | Commonthread</title>
     <link rel="icon" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
   
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
@@ -2663,8 +2663,8 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     <header class="fixed inset-x-0 top-0 z-50">
       <nav id="top-nav" class="mx-auto flex items-center justify-between px-4 md:px-6 py-3 backdrop-blur-xl bg-black/60 border-b border-white/10 transition-all duration-300">
         <a href="/" class="group inline-flex items-center gap-3">
-          <img src="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png" alt="AR Hosting" class="h-9 w-9 rounded-full ring-1 ring-white/10">
-          <span class="text-lg font-semibold tracking-tight text-transparent bg-clip-text" style="background-image: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1), rgba(244,63,94,0.95));">AR Hosting</span>
+          <img src="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png" alt="Commonthread" class="h-9 w-9 rounded-full ring-1 ring-white/10">
+          <span class="text-lg font-semibold tracking-tight text-transparent bg-clip-text" style="background-image: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1), rgba(244,63,94,0.95));">Commonthread</span>
         </a>
   
         <div class="flex items-center gap-2">
@@ -2843,7 +2843,7 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     <footer class="fixed inset-x-0 bottom-0 z-40">
       <div class="mx-auto w-full px-4 md:px-6 py-3 backdrop-blur-xl bg-black/60 border-t border-white/10">
         <p class="text-center text-xs text-zinc-400">
-          © 2025 <a href="/" class="text-orange-200 hover:text-orange-100 transition-colors font-medium">AR Hosting</a>
+          © 2025 <a href="/" class="text-orange-200 hover:text-orange-100 transition-colors font-medium">Commonthread</a>
         </p>
       </div>
     </footer>

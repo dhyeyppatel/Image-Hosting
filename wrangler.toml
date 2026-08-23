@@ -1,4 +1,4 @@
-name = "image-hosting"
+name = "commonthread"
 main = "_worker.js"
 compatibility_date = "2026-08-23"
 

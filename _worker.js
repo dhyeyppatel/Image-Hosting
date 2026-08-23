@@ -51,7 +51,7 @@ async function serveDocumentationPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>API Documentation - Commonthread</title>
   <link rel="manifest" href="https://raw.githubusercontent.com/commonthread/TG-MediaHost-Bot/main/Files/manifest.json">
-  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/commonthread/TG-MediaHost-Bot/main/Images/commonthread.png">
+  <link rel="icon" type="image/png" href="https://media.dhyey.cc/1787450204076.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"></noscript>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -98,7 +98,7 @@ async function serveDocumentationPage() {
     <nav id="top-nav" class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6 backdrop-blur-xl border-b border-white/10 transition-all duration-300" style="background: linear-gradient(to bottom, rgba(10,10,10,0.72), rgba(10,10,10,0.55));">
       <a href="https://media.dhyey.cc/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
         <div class="relative">
-          <img src="https://media.dhyey.cc/favicon.ico" alt="Commonthread Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
+          <img src="https://media.dhyey.cc/1787450204076.png" alt="Commonthread Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
           <div class="absolute -inset-2 rounded-full opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" style="background: radial-gradient(circle, rgba(251,146,60,0.45), transparent 60%);">
           </div>
         </div>

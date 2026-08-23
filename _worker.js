@@ -1,4 +1,4 @@
-﻿export default {
+export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     const domain = env.DOMAIN;
@@ -6,12 +6,12 @@
     const USERNAME = env.USERNAME;
     const PASSWORD = env.PASSWORD;
     const adminPath = 'admin';
-    const enableAuth = false; // Forced to false by user request
+    const enableAuth = env.ENABLE_AUTH === 'true';
     const TG_BOT_TOKEN = env.TG_BOT_TOKEN;
     const TG_CHAT_ID = env.TG_CHAT_ID;
     const maxSizeMB = env.MAX_SIZE_MB ? parseInt(env.MAX_SIZE_MB, 10) : 20;
     const maxSize = maxSizeMB * 1024 * 1024;
-    const Creator = 'https://media.dhyey.cc';
+    const Creator = 'https://t.me/Ashlynn_Repository';
 
     switch (pathname) {
       case '/':
@@ -30,12 +30,6 @@
         return handleBingImagesRequest();
       case '/delete-images':
         return await handleDeleteImagesRequest(request, DATABASE, USERNAME, PASSWORD);
-      case '/telegram':
-        return request.method === 'POST'
-          ? await handleTelegramWebhook(request, DATABASE, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize)
-          : new Response('Method Not Allowed', { status: 405 });
-      case '/set-webhook':
-        return await handleSetWebhook(request, domain, TG_BOT_TOKEN);
       default:
         return await handleImageRequest(request, DATABASE, TG_BOT_TOKEN);
     }
@@ -43,16 +37,1819 @@
 };
 
 async function serveDocumentationPage() {
-  const html = atob("PCFET0NUWVBFIGh0bWw+Cgo8aHRtbCBjbGFzcz0iZGFyayIgbGFuZz0iZW4iPjxoZWFkPgo8bWV0YSBjaGFyc2V0PSJ1dGYtOCIvPgo8bWV0YSBjb250ZW50PSJ3aWR0aD1kZXZpY2Utd2lkdGgsIGluaXRpYWwtc2NhbGU9MS4wIiBuYW1lPSJ2aWV3cG9ydCIvPgo8dGl0bGU+Q29tbW9udGhyZWFkIEFQSSBEb2N1bWVudGF0aW9uPC90aXRsZT4KPHNjcmlwdCBzcmM9Imh0dHBzOi8vY2RuLnRhaWx3aW5kY3NzLmNvbT9wbHVnaW5zPWZvcm1zLGNvbnRhaW5lci1xdWVyaWVzIj48L3NjcmlwdD4KPGxpbmsgaHJlZj0iaHR0cHM6Ly9mb250cy5nb29nbGVhcGlzLmNvbSIgcmVsPSJwcmVjb25uZWN0Ii8+CjxsaW5rIGNyb3Nzb3JpZ2luPSIiIGhyZWY9Imh0dHBzOi8vZm9udHMuZ3N0YXRpYy5jb20iIHJlbD0icHJlY29ubmVjdCIvPgo8bGluayBocmVmPSJodHRwczovL2ZvbnRzLmdvb2dsZWFwaXMuY29tL2NzczI/ZmFtaWx5PUdlaXN0OndnaHRANDAwOzUwMDs2MDAmYW1wO2ZhbWlseT1TeW5lOndnaHRANjAwOzcwMDs4MDAmYW1wO2Rpc3BsYXk9c3dhcCIgcmVsPSJzdHlsZXNoZWV0Ii8+CjxsaW5rIGhyZWY9Imh0dHBzOi8vZm9udHMuZ29vZ2xlYXBpcy5jb20vY3NzMj9mYW1pbHk9TWF0ZXJpYWwrU3ltYm9scytPdXRsaW5lZDp3Z2h0LEZJTExAMTAwLi43MDAsMC4uMSZhbXA7ZGlzcGxheT1zd2FwIiByZWw9InN0eWxlc2hlZXQiLz4KPGxpbmsgaHJlZj0iaHR0cHM6Ly9mb250cy5nb29nbGVhcGlzLmNvbS9jc3MyP2ZhbWlseT1NYXRlcmlhbCtTeW1ib2xzK091dGxpbmVkOndnaHQsRklMTEAxMDAuLjcwMCwwLi4xJmFtcDtkaXNwbGF5PXN3YXAiIHJlbD0ic3R5bGVzaGVldCIvPgo8c2NyaXB0IGlkPSJ0YWlsd2luZC1jb25maWciPgogICAgICAgIHRhaWx3aW5kLmNvbmZpZyA9IHsKICAgICAgICAgICAgZGFya01vZGU6ICJjbGFzcyIsCiAgICAgICAgICAgIHRoZW1lOiB7CiAgICAgICAgICAgICAgICBleHRlbmQ6IHsKICAgICAgICAgICAgICAgICAgICAiY29sb3JzIjogewogICAgICAgICAgICAgICAgICAgICAgICAiaW5kaWdvLWdsb3ciOiAicmdiYSg5OSwgMTAyLCAyNDEsIDAuMTUpIiwKICAgICAgICAgICAgICAgICAgICAgICAgIm9uLXRlcnRpYXJ5LWZpeGVkIjogIiMzMDE0MDAiLAogICAgICAgICAgICAgICAgICAgICAgICAic3VyZmFjZS1lbGV2YXRlZCI6ICIjMTgxODFiIiwKICAgICAgICAgICAgICAgICAgICAgICAgIm9uLXN1cmZhY2UiOiAiI2U1ZTFlNCIsCiAgICAgICAgICAgICAgICAgICAgICAgICJvbi1zdXJmYWNlLXZhcmlhbnQiOiAiI2M3YzRkNyIsCiAgICAgICAgICAgICAgICAgICAgICAgICJwcmltYXJ5LWZpeGVkIjogIiNlMWUwZmYiLAogICAgICAgICAgICAgICAgICAgICAgICAic2Vjb25kYXJ5IjogIiNkMGJjZmYiLAogICAgICAgICAgICAgICAgICAgICAgICAib24tZXJyb3IiOiAiIzY5MDAwNSIsCiAgICAgICAgICAgICAgICAgICAgICAgICJvbi1zZWNvbmRhcnktZml4ZWQtdmFyaWFudCI6ICIjNTUxNmJlIiwKICAgICAgICAgICAgICAgICAgICAgICAgInN1cmZhY2UiOiAiIzEzMTMxNSIsCiAgICAgICAgICAgICAgICAgICAgICAgICJvbi1wcmltYXJ5LWZpeGVkIjogIiMwNzAwNmMiLAogICAgICAgICAgICAgICAgICAgICAgICAiaW52ZXJzZS1wcmltYXJ5IjogIiM0OTRiZDYiLAogICAgICAgICAgICAgICAgICAgICAgICAicHJpbWFyeS1jb250YWluZXIiOiAiIzgwODNmZiIsCiAgICAgICAgICAgICAgICAgICAgICAgICJpbnZlcnNlLW9uLXN1cmZhY2UiOiAiIzMxMzAzMiIsCiAgICAgICAgICAgICAgICAgICAgICAgICJ2aW9sZXQtZ2xvdyI6ICJyZ2JhKDEzOSwgOTIsIDI0NiwgMC4xNSkiLAogICAgICAgICAgICAgICAgICAgICAgICAib3V0bGluZS12YXJpYW50IjogIiM0NjQ1NTQiLAogICAgICAgICAgICAgICAgICAgICAgICAidGVydGlhcnktY29udGFpbmVyIjogIiNkOTc3MjEiLAogICAgICAgICAgICAgICAgICAgICAgICAic3VyZmFjZS1jb250YWluZXItaGlnaGVzdCI6ICIjMzUzNDM3IiwKICAgICAgICAgICAgICAgICAgICAgICAgInRlcnRpYXJ5LWZpeGVkIjogIiNmZmRjYzUiLAogICAgICAgICAgICAgICAgICAgICAgICAic2Vjb25kYXJ5LWZpeGVkIjogIiNlOWRkZmYiLAogICAgICAgICAgICAgICAgICAgICAgICAib24tdGVydGlhcnktZml4ZWQtdmFyaWFudCI6ICIjNzAzNzAwIiwKICAgICAgICAgICAgICAgICAgICAgICAgInN1cmZhY2UtZGltIjogIiMxMzEzMTUiLAogICAgICAgICAgICAgICAgICAgICAgICAib24tcHJpbWFyeS1jb250YWluZXIiOiAiIzBkMDA5NiIsCiAgICAgICAgICAgICAgICAgICAgICAgICJzdXJmYWNlLWNvbnRhaW5lci1oaWdoIjogIiMyYTJhMmMiLAogICAgICAgICAgICAgICAgICAgICAgICAib24tZXJyb3ItY29udGFpbmVyIjogIiNmZmRhZDYiLAogICAgICAgICAgICAgICAgICAgICAgICAiYmFja2dyb3VuZCI6ICIjMTMxMzE1IiwKICAgICAgICAgICAgICAgICAgICAgICAgIm9uLWJhY2tncm91bmQiOiAiI2U1ZTFlNCIsCiAgICAgICAgICAgICAgICAgICAgICAgICJvbi1zZWNvbmRhcnkiOiAiIzNjMDA5MSIsCiAgICAgICAgICAgICAgICAgICAgICAgICJzdXJmYWNlLWNvbnRhaW5lci1sb3dlc3QiOiAiIzBlMGUxMCIsCiAgICAgICAgICAgICAgICAgICAgICAgICJvdXRsaW5lIjogIiM5MDhmYTAiLAogICAgICAgICAgICAgICAgICAgICAgICAic3VyZmFjZS1icmlnaHQiOiAiIzM5MzkzYiIsCiAgICAgICAgICAgICAgICAgICAgICAgICJvbi10ZXJ0aWFyeSI6ICIjNGYyNTAwIiwKICAgICAgICAgICAgICAgICAgICAgICAgIm9uLXNlY29uZGFyeS1jb250YWluZXIiOiAiI2M0YWJmZiIsCiAgICAgICAgICAgICAgICAgICAgICAgICJzdXJmYWNlLXRpbnQiOiAiI2MwYzFmZiIsCiAgICAgICAgICAgICAgICAgICAgICAgICJib3JkZXItc3VidGxlIjogInJnYmEoMjU1LCAyNTUsIDI1NSwgMC4xKSIsCiAgICAgICAgICAgICAgICAgICAgICAgICJpbnZlcnNlLXN1cmZhY2UiOiAiI2U1ZTFlNCIsCiAgICAgICAgICAgICAgICAgICAgICAgICJzZWNvbmRhcnktY29udGFpbmVyIjogIiM1NzFiYzEiLAogICAgICAgICAgICAgICAgICAgICAgICAidGVydGlhcnkiOiAiI2ZmYjc4MyIsCiAgICAgICAgICAgICAgICAgICAgICAgICJzZWNvbmRhcnktZml4ZWQtZGltIjogIiNkMGJjZmYiLAogICAgICAgICAgICAgICAgICAgICAgICAidGVydGlhcnktZml4ZWQtZGltIjogIiNmZmI3ODMiLAogICAgICAgICAgICAgICAgICAgICAgICAic3VyZmFjZS12YXJpYW50IjogIiMzNTM0MzciLAogICAgICAgICAgICAgICAgICAgICAgICAicHJpbWFyeSI6ICIjYzBjMWZmIiwKICAgICAgICAgICAgICAgICAgICAgICAgImVycm9yLWNvbnRhaW5lciI6ICIjOTMwMDBhIiwKICAgICAgICAgICAgICAgICAgICAgICAgIm9uLXByaW1hcnktZml4ZWQtdmFyaWFudCI6ICIjMmYyZWJlIiwKICAgICAgICAgICAgICAgICAgICAgICAgImVycm9yIjogIiNmZmI0YWIiLAogICAgICAgICAgICAgICAgICAgICAgICAidGV4dC1tdXRlZCI6ICIjYTFhMWFhIiwKICAgICAgICAgICAgICAgICAgICAgICAgInByaW1hcnktZml4ZWQtZGltIjogIiNjMGMxZmYiLAogICAgICAgICAgICAgICAgICAgICAgICAib24tc2Vjb25kYXJ5LWZpeGVkIjogIiMyMzAwNWMiLAogICAgICAgICAgICAgICAgICAgICAgICAib24tcHJpbWFyeSI6ICIjMTAwMGE5IiwKICAgICAgICAgICAgICAgICAgICAgICAgInN1cmZhY2UtY29udGFpbmVyLWxvdyI6ICIjMWMxYjFkIiwKICAgICAgICAgICAgICAgICAgICAgICAgInN1cmZhY2UtY29udGFpbmVyIjogIiMyMDFmMjIiLAogICAgICAgICAgICAgICAgICAgICAgICAib24tdGVydGlhcnktY29udGFpbmVyIjogIiM0NTIwMDAiCiAgICAgICAgICAgICAgICAgICAgfSwKICAgICAgICAgICAgICAgICAgICAiYm9yZGVyUmFkaXVzIjogewogICAgICAgICAgICAgICAgICAgICAgICAiREVGQVVMVCI6ICIwLjI1cmVtIiwKICAgICAgICAgICAgICAgICAgICAgICAgImxnIjogIjAuNXJlbSIsCiAgICAgICAgICAgICAgICAgICAgICAgICJ4bCI6ICIwLjc1cmVtIiwKICAgICAgICAgICAgICAgICAgICAgICAgImZ1bGwiOiAiOTk5OXB4IgogICAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICAgICAgInNwYWNpbmciOiB7CiAgICAgICAgICAgICAgICAgICAgICAgICJtYXJnaW4tbW9iaWxlIjogIjE2cHgiLAogICAgICAgICAgICAgICAgICAgICAgICAibWFyZ2luLWRlc2t0b3AiOiAiNDhweCIsCiAgICAgICAgICAgICAgICAgICAgICAgICJndXR0ZXIiOiAiMjRweCIsCiAgICAgICAgICAgICAgICAgICAgICAgICJ1bml0IjogIjRweCIsCiAgICAgICAgICAgICAgICAgICAgICAgICJtYXgtd2lkdGgiOiAiMTI4MHB4IgogICAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICAgICAgImZvbnRGYW1pbHkiOiB7CiAgICAgICAgICAgICAgICAgICAgICAgICJoZWFkbGluZS1sZy1tb2JpbGUiOiBbIlN5bmUiXSwKICAgICAgICAgICAgICAgICAgICAgICAgImJvZHktbGciOiBbIkdlaXN0Il0sCiAgICAgICAgICAgICAgICAgICAgICAgICJ0aXRsZS1tZCI6IFsiU3luZSJdLAogICAgICAgICAgICAgICAgICAgICAgICAibGFiZWwtc20iOiBbIkdlaXN0Il0sCiAgICAgICAgICAgICAgICAgICAgICAgICJkaXNwbGF5LXhsIjogWyJTeW5lIl0sCiAgICAgICAgICAgICAgICAgICAgICAgICJib2R5LW1kIjogWyJHZWlzdCJdLAogICAgICAgICAgICAgICAgICAgICAgICAiY29kZSI6IFsidWktbW9ub3NwYWNlIiwgIlNGTW9uby1SZWd1bGFyIiwgIk1lbmxvIiwgIk1vbmFjbyIsICJDb25zb2xhcyIsICJMaWJlcmF0aW9uIE1vbm8iLCAiQ291cmllciBOZXciLCAibW9ub3NwYWNlIl0sCiAgICAgICAgICAgICAgICAgICAgICAgICJoZWFkbGluZS1sZyI6IFsiU3luZSJdCiAgICAgICAgICAgICAgICAgICAgfSwKICAgICAgICAgICAgICAgICAgICAiZm9udFNpemUiOiB7CiAgICAgICAgICAgICAgICAgICAgICAgICJoZWFkbGluZS1sZy1tb2JpbGUiOiBbIjMycHgiLCB7ICJsaW5lSGVpZ2h0IjogIjM4cHgiLCAiZm9udFdlaWdodCI6ICI3MDAiIH1dLAogICAgICAgICAgICAgICAgICAgICAgICAiYm9keS1sZyI6IFsiMThweCIsIHsgImxpbmVIZWlnaHQiOiAiMjhweCIsICJmb250V2VpZ2h0IjogIjQwMCIgfV0sCiAgICAgICAgICAgICAgICAgICAgICAgICJ0aXRsZS1tZCI6IFsiMjRweCIsIHsgImxpbmVIZWlnaHQiOiAiMzJweCIsICJmb250V2VpZ2h0IjogIjYwMCIgfV0sCiAgICAgICAgICAgICAgICAgICAgICAgICJsYWJlbC1zbSI6IFsiMTRweCIsIHsgImxpbmVIZWlnaHQiOiAiMjBweCIsICJsZXR0ZXJTcGFjaW5nIjogIjAuMDJlbSIsICJmb250V2VpZ2h0IjogIjUwMCIgfV0sCiAgICAgICAgICAgICAgICAgICAgICAgICJkaXNwbGF5LXhsIjogWyI2NHB4IiwgeyAibGluZUhlaWdodCI6ICI3MnB4IiwgImxldHRlclNwYWNpbmciOiAiLTAuMDJlbSIsICJmb250V2VpZ2h0IjogIjgwMCIgfV0sCiAgICAgICAgICAgICAgICAgICAgICAgICJib2R5LW1kIjogWyIxNnB4IiwgeyAibGluZUhlaWdodCI6ICIyNHB4IiwgImZvbnRXZWlnaHQiOiAiNDAwIiB9XSwKICAgICAgICAgICAgICAgICAgICAgICAgImNvZGUiOiBbIjE0cHgiLCB7ICJsaW5lSGVpZ2h0IjogIjIwcHgiLCAiZm9udFdlaWdodCI6ICI0MDAiIH1dLAogICAgICAgICAgICAgICAgICAgICAgICAiaGVhZGxpbmUtbGciOiBbIjQwcHgiLCB7ICJsaW5lSGVpZ2h0IjogIjQ4cHgiLCAibGV0dGVyU3BhY2luZyI6ICItMC4wMWVtIiwgImZvbnRXZWlnaHQiOiAiNzAwIiB9XQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgIH0sCiAgICAgICAgfQogICAgPC9zY3JpcHQ+CjxzdHlsZT4KICAgICAgICBib2R5IHsKICAgICAgICAgICAgYmFja2dyb3VuZC1jb2xvcjogIzA5MDkwYjsKICAgICAgICB9CiAgICAgICAgCiAgICAgICAgLmdsYXNzLXBhbmVsIHsKICAgICAgICAgICAgYmFja2dyb3VuZDogcmdiYSgyNCwgMjQsIDI3LCAwLjcpOwogICAgICAgICAgICBiYWNrZHJvcC1maWx0ZXI6IGJsdXIoMTJweCk7CiAgICAgICAgICAgIGJvcmRlcjogMXB4IHNvbGlkIHJnYmEoMjU1LCAyNTUsIDI1NSwgMC4xKTsKICAgICAgICB9CiAgICAgICAgCiAgICAgICAgLm5hdi1pdGVtLmFjdGl2ZSB7CiAgICAgICAgICAgIGJhY2tncm91bmQtY29sb3I6ICMxODE4MWI7CiAgICAgICAgICAgIGJvcmRlci1sZWZ0OiAycHggc29saWQgcmdiYSg5OSwgMTAyLCAyNDEsIDEpOwogICAgICAgICAgICBjb2xvcjogcmdiYSgxOTIsIDE5MywgMjU1LCAxKTsgLyogcHJpbWFyeSBjb2xvciAqLwogICAgICAgICAgICB0ZXh0LXNoYWRvdzogMCAwIDEwcHggcmdiYSg5OSwgMTAyLCAyNDEsIDAuNSk7CiAgICAgICAgfQogICAgICAgIAogICAgICAgIC5uYXYtaXRlbTpob3Zlcjpub3QoLmFjdGl2ZSkgewogICAgICAgICAgICBiYWNrZ3JvdW5kLWNvbG9yOiAjMTgxODFiOwogICAgICAgIH0KICAgICAgICAKICAgICAgICAuY29kZS1ibG9jay1oZWFkZXIgewogICAgICAgICAgICBiYWNrZ3JvdW5kLWNvbG9yOiAjMTgxODFiOwogICAgICAgICAgICBib3JkZXItYm90dG9tOiAxcHggc29saWQgcmdiYSgyNTUsIDI1NSwgMjU1LCAwLjA1KTsKICAgICAgICB9CiAgICAgICAgCiAgICAgICAgLmNvZGUtYmxvY2stY29udGVudCB7CiAgICAgICAgICAgIGJhY2tncm91bmQtY29sb3I6ICMwZTBlMTA7CiAgICAgICAgfQogICAgICAgIAogICAgICAgIC8qIFN5bnRheCBoaWdobGlnaHRpbmcgc2ltcGxlIG1vY2sgKi8KICAgICAgICAudG9rZW4ua2V5d29yZCB7IGNvbG9yOiAjYzRhYmZmOyB9CiAgICAgICAgLnRva2VuLnN0cmluZyB7IGNvbG9yOiAjZmZiNzgzOyB9CiAgICAgICAgLnRva2VuLnByb3BlcnR5IHsgY29sb3I6ICNjMGMxZmY7IH0KICAgICAgICAudG9rZW4ucHVuY3R1YXRpb24geyBjb2xvcjogI2ExYTFhYTsgfQogICAgICAgIAogICAgICAgIC8qIFN1YnRsZSBzY3JvbGxiYXIgKi8KICAgICAgICA6Oi13ZWJraXQtc2Nyb2xsYmFyIHsKICAgICAgICAgICAgd2lkdGg6IDhweDsKICAgICAgICAgICAgaGVpZ2h0OiA4cHg7CiAgICAgICAgfQogICAgICAgIDo6LXdlYmtpdC1zY3JvbGxiYXItdHJhY2sgewogICAgICAgICAgICBiYWNrZ3JvdW5kOiAjMDkwOTBiOyAKICAgICAgICB9CiAgICAgICAgOjotd2Via2l0LXNjcm9sbGJhci10aHVtYiB7CiAgICAgICAgICAgIGJhY2tncm91bmQ6ICMzNTM0Mzc7IAogICAgICAgICAgICBib3JkZXItcmFkaXVzOiA0cHg7CiAgICAgICAgfQogICAgICAgIDo6LXdlYmtpdC1zY3JvbGxiYXItdGh1bWI6aG92ZXIgewogICAgICAgICAgICBiYWNrZ3JvdW5kOiAjNDY0NTU0OyAKICAgICAgICB9CiAgICA8L3N0eWxlPgo8bGluayByZWw9Imljb24iIGhyZWY9Imh0dHBzOi8vbWVkaWEuZGh5ZXkuY2MvMTc4NzQ1MDIwNDA3Ni5wbmciIHR5cGU9ImltYWdlL3BuZyIvPjwvaGVhZD4KPGJvZHkgY2xhc3M9InRleHQtb24tYmFja2dyb3VuZCBmb250LWJvZHktbWQgYW50aWFsaWFzZWQgbWluLWgtc2NyZWVuIGZsZXggZmxleC1jb2wiPgo8IS0tIFRvcE5hdkJhciAtLT4KPG5hdiBjbGFzcz0iYmctc3VyZmFjZS83MCBkYXJrOmJnLXN1cmZhY2UvNzAgYmFja2Ryb3AtYmx1ci14bCB0ZXh0LXByaW1hcnkgZGFyazp0ZXh0LXByaW1hcnkgSGVhZGxpbmVzOiBmb250LWhlYWRsaW5lLWxnIHRleHQtaGVhZGxpbmUtbGcuIEJvZHk6IGZvbnQtYm9keS1tZCB0ZXh0LWJvZHktbWQuIGZpeGVkIHRvcC0wIHctZnVsbCB6LTUwIGJvcmRlci1iIGJvcmRlci13aGl0ZS8xMCBzaGFkb3ctWzBfMF80MHB4X3JnYmEoOTksMTAyLDI0MSwwLjEpXSI+CjxkaXYgY2xhc3M9ImZsZXgganVzdGlmeS1iZXR3ZWVuIGl0ZW1zLWNlbnRlciBoLTE2IHB4LW1hcmdpbi1kZXNrdG9wIG1heC13LW1heC13aWR0aCBteC1hdXRvIj4KPGRpdiBjbGFzcz0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTgiPgo8YSBjbGFzcz0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTMiIGhyZWY9Ii8iPgogIDxpbWcgc3JjPSJodHRwczovL21lZGlhLmRoeWV5LmNjLzE3ODc0NTAyMDQwNzYucG5nIiBhbHQ9IkNvbW1vbnRocmVhZCIgY2xhc3M9ImgtOSB3LTkgcm91bmRlZC1sZyBvYmplY3QtY292ZXIiIC8+CiAgPHNwYW4gY2xhc3M9ImZvbnQtaGVhZGxpbmUtbGcgdGV4dC1oZWFkbGluZS1sZyBmb250LWJvbGQgdGV4dC1vbi1zdXJmYWNlIGRhcms6dGV4dC1vbi1zdXJmYWNlIHRyYWNraW5nLXRpZ2h0ZXIiPkNvbW1vbnRocmVhZDwvc3Bhbj4KPC9hPgo8ZGl2IGNsYXNzPSJoaWRkZW4gbWQ6ZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTYiPgo8YSBjbGFzcz0idGV4dC1vbi1zdXJmYWNlLXZhcmlhbnQgZGFyazp0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCBob3Zlcjp0ZXh0LW9uLXN1cmZhY2UgZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCBob3ZlcjpiZy1pbmRpZ28tZ2xvdyB0cmFuc2l0aW9uLWFsbCBkdXJhdGlvbi0zMDAgcHgtMyBweS0yIHJvdW5kZWQtbWQiIGhyZWY9Ii8iPkhvbWU8L2E+CjxhIGNsYXNzPSJ0ZXh0LXByaW1hcnkgZGFyazp0ZXh0LXByaW1hcnkgYm9yZGVyLWItMiBib3JkZXItcHJpbWFyeSBwYi0xIGZvbnQtYm9keS1tZCB0ZXh0LWJvZHktbWQgaG92ZXI6YmctaW5kaWdvLWdsb3cgdHJhbnNpdGlvbi1hbGwgZHVyYXRpb24tMzAwIHB4LTMgcHktMiByb3VuZGVkLW1kIEFjdGl2ZTogc2NhbGUtOTUgZHVyYXRpb24tMTAwIiBocmVmPSIvZG9jcyI+QVBJIERvY3M8L2E+CjwvZGl2Pgo8L2Rpdj4KPGRpdiBjbGFzcz0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTQiPgoKPGJ1dHRvbiBjbGFzcz0iYmctZ3JhZGllbnQtdG8tciBmcm9tLWluZGlnby01MDAgdG8tdmlvbGV0LTUwMCB0ZXh0LXdoaXRlIGZvbnQtbGFiZWwtc20gdGV4dC1sYWJlbC1zbSBweC00IHB5LTIgcm91bmRlZC1mdWxsIGhvdmVyOnNoYWRvdy1bMF8wXzE1cHhfcmdiYSg5OSwxMDIsMjQxLDAuNSldIHRyYW5zaXRpb24tYWxsIiBvbmNsaWNrPSJ3aW5kb3cub3BlbignaHR0cHM6Ly90Lm1lL0ltYWdlaG9zdHNzYm90JywgJ19ibGFuaycpIj5VcGxvYWQgdmlhIEJvdDwvYnV0dG9uPgo8L2Rpdj4KPC9kaXY+CjwvbmF2Pgo8IS0tIE1haW4gTGF5b3V0IC0tPgo8ZGl2IGNsYXNzPSJmbGV4LTEgcHQtMjQgcGItMjAgbWF4LXctbWF4LXdpZHRoIG14LWF1dG8gdy1mdWxsIHB4LW1hcmdpbi1kZXNrdG9wIGdyaWQgZ3JpZC1jb2xzLTEgbGc6Z3JpZC1jb2xzLTEyIGdhcC1ndXR0ZXIiPgo8IS0tIExlZnQgU2lkZWJhciAtLT4KPGFzaWRlIGNsYXNzPSJoaWRkZW4gbGc6YmxvY2sgbGc6Y29sLXNwYW4tMyI+CjxkaXYgY2xhc3M9InN0aWNreSB0b3AtMzIgZ2xhc3MtcGFuZWwgcm91bmRlZC1sZyBwLTYiPgo8aDMgY2xhc3M9ImZvbnQtbGFiZWwtc20gdGV4dC1sYWJlbC1zbSB0ZXh0LXRleHQtbXV0ZWQgdXBwZXJjYXNlIHRyYWNraW5nLXdpZGVyIG1iLTQiPkRvY3VtZW50YXRpb248L2gzPgo8dWwgY2xhc3M9InNwYWNlLXktMSI+CjxsaT48YSBjbGFzcz0ibmF2LWl0ZW0gYWN0aXZlIGJsb2NrIHB4LTQgcHktMiByb3VuZGVkLXItbWQgZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LW9uLXN1cmZhY2UgdHJhbnNpdGlvbi1jb2xvcnMiIGhyZWY9IiNpbnRybyI+SW50cm9kdWN0aW9uPC9hPjwvbGk+CjxsaT48YSBjbGFzcz0ibmF2LWl0ZW0gYmxvY2sgcHgtNCBweS0yIGJvcmRlci1sLTIgYm9yZGVyLXRyYW5zcGFyZW50IHJvdW5kZWQtci1tZCBmb250LWJvZHktbWQgdGV4dC1ib2R5LW1kIHRleHQtb24tc3VyZmFjZS12YXJpYW50IHRyYW5zaXRpb24tY29sb3JzIiBocmVmPSIjdXBsb2FkIj5VcGxvYWQgTWVkaWE8L2E+PC9saT4KPGxpPjxhIGNsYXNzPSJuYXYtaXRlbSBibG9jayBweC00IHB5LTIgYm9yZGVyLWwtMiBib3JkZXItdHJhbnNwYXJlbnQgcm91bmRlZC1yLW1kIGZvbnQtYm9keS1tZCB0ZXh0LWJvZHktbWQgdGV4dC1vbi1zdXJmYWNlLXZhcmlhbnQgdHJhbnNpdGlvbi1jb2xvcnMiIGhyZWY9IiN1cmwtdXBsb2FkIj5VUkwgVXBsb2FkPC9hPjwvbGk+CjxsaT48YSBjbGFzcz0ibmF2LWl0ZW0gYmxvY2sgcHgtNCBweS0yIGJvcmRlci1sLTIgYm9yZGVyLXRyYW5zcGFyZW50IHJvdW5kZWQtci1tZCBmb250LWJvZHktbWQgdGV4dC1ib2R5LW1kIHRleHQtb24tc3VyZmFjZS12YXJpYW50IHRyYW5zaXRpb24tY29sb3JzIiBocmVmPSIjcmV0cmlldmUiPlJldHJpZXZlIE1lZGlhPC9hPjwvbGk+CjxsaT48YSBjbGFzcz0ibmF2LWl0ZW0gYmxvY2sgcHgtNCBweS0yIGJvcmRlci1sLTIgYm9yZGVyLXRyYW5zcGFyZW50IHJvdW5kZWQtci1tZCBmb250LWJvZHktbWQgdGV4dC1ib2R5LW1kIHRleHQtb24tc3VyZmFjZS12YXJpYW50IHRyYW5zaXRpb24tY29sb3JzIiBocmVmPSIjd2FsbHBhcGVycyI+V2FsbHBhcGVyczwvYT48L2xpPgo8L3VsPgo8L2Rpdj4KPC9hc2lkZT4KPCEtLSBSaWdodCBDb250ZW50IC0tPgo8bWFpbiBjbGFzcz0iY29sLXNwYW4tMSBsZzpjb2wtc3Bhbi05IHNwYWNlLXktMTYiPgo8IS0tIEJhc2UgVVJMIFNlY3Rpb24gLS0+CjxzZWN0aW9uIGNsYXNzPSJzcGFjZS15LTYiIGlkPSJpbnRybyI+CjxkaXY+CjxoMSBjbGFzcz0iZm9udC1oZWFkbGluZS1sZyB0ZXh0LWhlYWRsaW5lLWxnIHRleHQtb24tc3VyZmFjZSBtYi0yIj5Db21tb250aHJlYWQgQVBJPC9oMT4KPHAgY2xhc3M9ImZvbnQtYm9keS1sZyB0ZXh0LWJvZHktbGcgdGV4dC1vbi1zdXJmYWNlLXZhcmlhbnQiPldlbGNvbWUgdG8gdGhlIENvbW1vbnRocmVhZCBBUEkgZG9jdW1lbnRhdGlvbi4gVXNlIG91ciBoaWdoLXBlcmZvcm1hbmNlIGVuZHBvaW50cyB0byBtYW5hZ2UgbWVkaWEgdXBsb2FkcywgcmV0cmlldmFsLCBhbmQgYWRtaW5pc3RyYXRpb24uPC9wPgo8L2Rpdj4KPGRpdiBjbGFzcz0iZ2xhc3MtcGFuZWwgcm91bmRlZC1sZyBwLTYgYm9yZGVyLXQgYm9yZGVyLWJvcmRlci1zdWJ0bGUiPgo8aDIgY2xhc3M9ImZvbnQtdGl0bGUtbWQgdGV4dC10aXRsZS1tZCB0ZXh0LW9uLXN1cmZhY2UgbWItNCI+QmFzZSBVUkw8L2gyPgo8ZGl2IGNsYXNzPSJmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4gYmctc3VyZmFjZS1lbGV2YXRlZCBib3JkZXIgYm9yZGVyLW91dGxpbmUtdmFyaWFudCByb3VuZGVkLW1kIHAtNCI+Cjxjb2RlIGNsYXNzPSJmb250LWNvZGUgdGV4dC1jb2RlIHRleHQtcHJpbWFyeSI+aHR0cHM6Ly9tZWRpYS5kaHlleS5jYzwvY29kZT4KPGJ1dHRvbiBjbGFzcz0idGV4dC10ZXh0LW11dGVkIGhvdmVyOnRleHQtcHJpbWFyeSB0cmFuc2l0aW9uLWNvbG9ycyBmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWNlbnRlciBwLTIgcm91bmRlZC1tZCBob3ZlcjpiZy1zdXJmYWNlLXZhcmlhbnQiPgo8c3BhbiBjbGFzcz0ibWF0ZXJpYWwtc3ltYm9scy1vdXRsaW5lZCIgZGF0YS1pY29uPSJjb250ZW50X2NvcHkiPmNvbnRlbnRfY29weTwvc3Bhbj4KPC9idXR0b24+CjwvZGl2Pgo8cCBjbGFzcz0iZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LXRleHQtbXV0ZWQgbXQtNCI+QWxsIEFQSSByZXF1ZXN0cyBzaG91bGQgYmUgcHJlZml4ZWQgd2l0aCB0aGlzIGJhc2UgVVJMLiBFbnN1cmUgeW91IHVzZSBIVFRQUyBmb3IgYWxsIHJlcXVlc3RzLjwvcD4KPC9kaXY+Cjwvc2VjdGlvbj4KPCEtLSBVcGxvYWQgRW5kcG9pbnQgLS0+CjxzZWN0aW9uIGNsYXNzPSJnbGFzcy1wYW5lbCByb3VuZGVkLXhsIG92ZXJmbG93LWhpZGRlbiBib3JkZXItdCBib3JkZXItYm9yZGVyLXN1YnRsZSBzaGFkb3ctWzBfNHB4XzMwcHhfcmdiYSgwLDAsMCwwLjUpXSIgaWQ9InVwbG9hZCI+CjxkaXYgY2xhc3M9InAtOCBib3JkZXItYiBib3JkZXItd2hpdGUvNSI+CjxkaXYgY2xhc3M9ImZsZXggaXRlbXMtY2VudGVyIGdhcC00IG1iLTQiPgo8c3BhbiBjbGFzcz0iYmctaW5kaWdvLTkwMC8zMCB0ZXh0LWluZGlnby00MDAgYm9yZGVyIGJvcmRlci1pbmRpZ28tNTAwLzMwIHB4LTMgcHktMSByb3VuZGVkLWZ1bGwgZm9udC1jb2RlIHRleHQtY29kZSBmb250LWJvbGQiPlBPU1Q8L3NwYW4+Cjxjb2RlIGNsYXNzPSJmb250LWNvZGUgdGV4dC1ib2R5LW1kIHRleHQtb24tc3VyZmFjZSI+L3VwbG9hZDwvY29kZT4KPC9kaXY+CjxoMiBjbGFzcz0iZm9udC10aXRsZS1tZCB0ZXh0LXRpdGxlLW1kIHRleHQtb24tc3VyZmFjZSBtYi0zIj5VcGxvYWQgTWVkaWE8L2gyPgo8cCBjbGFzcz0iZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCI+VXBsb2FkcyBhIG1lZGlhIGZpbGUgdG8gdGhlIHNlcnZlci4gU3VwcG9ydHMgaW1hZ2VzIGFuZCB2aWRlb3MgdXAgdG8gNTBNQi48L3A+CjwvZGl2Pgo8ZGl2IGNsYXNzPSJncmlkIGdyaWQtY29scy0xIHhsOmdyaWQtY29scy0yIGdhcC1weCBiZy13aGl0ZS81Ij4KPCEtLSBSZXF1ZXN0IERldGFpbHMgLS0+CjxkaXYgY2xhc3M9ImJnLXN1cmZhY2UtZGltIHAtOCI+CjxoMyBjbGFzcz0iZm9udC1sYWJlbC1zbSB0ZXh0LWxhYmVsLXNtIHRleHQtdGV4dC1tdXRlZCB1cHBlcmNhc2UgdHJhY2tpbmctd2lkZXIgbWItNCI+UmVxdWVzdCBCb2R5PC9oMz4KPGRpdiBjbGFzcz0ic3BhY2UteS00Ij4KPGRpdiBjbGFzcz0iYm9yZGVyLWIgYm9yZGVyLXdoaXRlLzUgcGItNCI+CjxkaXYgY2xhc3M9ImZsZXggaXRlbXMtY2VudGVyIGdhcC0yIG1iLTEiPgo8c3BhbiBjbGFzcz0iZm9udC1jb2RlIHRleHQtY29kZSB0ZXh0LW9uLXN1cmZhY2UiPmZpbGU8L3NwYW4+CjxzcGFuIGNsYXNzPSJmb250LWxhYmVsLXNtIHRleHQtWzEycHhdIHRleHQtdGV4dC1tdXRlZCI+YmluYXJ5PC9zcGFuPgo8c3BhbiBjbGFzcz0iZm9udC1sYWJlbC1zbSB0ZXh0LVsxMnB4XSB0ZXh0LWVycm9yIHB4LTIgcHktMC41IHJvdW5kZWQgYmctZXJyb3ItY29udGFpbmVyLzIwIj5yZXF1aXJlZDwvc3Bhbj4KPC9kaXY+CjxwIGNsYXNzPSJmb250LWJvZHktbWQgdGV4dC1ib2R5LW1kIHRleHQtb24tc3VyZmFjZS12YXJpYW50IHRleHQtc20iPlRoZSBtZWRpYSBmaWxlIHRvIHVwbG9hZCAobXVsdGlwYXJ0L2Zvcm0tZGF0YSkuPC9wPgo8L2Rpdj4KPC9kaXY+CjwvZGl2Pgo8IS0tIENvZGUgRXhhbXBsZSAtLT4KPGRpdiBjbGFzcz0iYmctc3VyZmFjZS1kaW0gZmxleCBmbGV4LWNvbCBoLWZ1bGwiPgo8ZGl2IGNsYXNzPSJjb2RlLWJsb2NrLWhlYWRlciBweC00IHB5LTMgZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTQiPgo8YnV0dG9uIGNsYXNzPSJmb250LWxhYmVsLXNtIHRleHQtbGFiZWwtc20gdGV4dC1wcmltYXJ5IGJvcmRlci1iIGJvcmRlci1wcmltYXJ5IHBiLTEiPmNVUkw8L2J1dHRvbj4KCjwvZGl2Pgo8ZGl2IGNsYXNzPSJjb2RlLWJsb2NrLWNvbnRlbnQgcC00IGZsZXgtMSBvdmVyZmxvdy14LWF1dG8iPgo8cHJlIGNsYXNzPSJmb250LWNvZGUgdGV4dC1jb2RlIHRleHQtb24tc3VyZmFjZS12YXJpYW50IGxlYWRpbmctcmVsYXhlZCI+Y3VybCAtWCBQT1NUIGh0dHBzOi8vbWVkaWEuZGh5ZXkuY2MvdXBsb2FkIFwKICAtSCAiQXV0aG9yaXphdGlvbjogQmVhcmVyIDxzcGFuIGNsYXNzPSJ0b2tlbiBzdHJpbmciPllPVVJfQVBJX0tFWTwvc3Bhbj4iIFwKICAtSCAiQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvZm9ybS1kYXRhIiBcCiAgLUYgImZpbGU9QDxzcGFuIGNsYXNzPSJ0b2tlbiBzdHJpbmciPi9wYXRoL3RvL3lvdXIvaW1hZ2UuanBnPC9zcGFuPiIKPC9wcmU+CjwvZGl2Pgo8L2Rpdj4KPC9kaXY+Cjwvc2VjdGlvbj4KPCEtLSBSZXRyaWV2ZSBFbmRwb2ludCAtLT4KPHNlY3Rpb24gY2xhc3M9ImdsYXNzLXBhbmVsIHJvdW5kZWQteGwgb3ZlcmZsb3ctaGlkZGVuIGJvcmRlci10IGJvcmRlci1ib3JkZXItc3VidGxlIHNoYWRvdy1bMF80cHhfMzBweF9yZ2JhKDAsMCwwLDAuNSldIiBpZD0icmV0cmlldmUiPgo8ZGl2IGNsYXNzPSJwLTggYm9yZGVyLWIgYm9yZGVyLXdoaXRlLzUiPgo8ZGl2IGNsYXNzPSJmbGV4IGl0ZW1zLWNlbnRlciBnYXAtNCBtYi00Ij4KPHNwYW4gY2xhc3M9ImJnLXRlYWwtOTAwLzMwIHRleHQtdGVhbC00MDAgYm9yZGVyIGJvcmRlci10ZWFsLTUwMC8zMCBweC0zIHB5LTEgcm91bmRlZC1mdWxsIGZvbnQtY29kZSB0ZXh0LWNvZGUgZm9udC1ib2xkIj5HRVQ8L3NwYW4+Cjxjb2RlIGNsYXNzPSJmb250LWNvZGUgdGV4dC1ib2R5LW1kIHRleHQtb24tc3VyZmFjZSI+LyZsdDtpZCZndDs8L2NvZGU+CjwvZGl2Pgo8aDIgY2xhc3M9ImZvbnQtdGl0bGUtbWQgdGV4dC10aXRsZS1tZCB0ZXh0LW9uLXN1cmZhY2UgbWItMyI+UmV0cmlldmUgTWVkaWE8L2gyPgo8cCBjbGFzcz0iZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCI+UmV0cmlldmVzIG1ldGFkYXRhIGZvciBhIHNwZWNpZmljIG1lZGlhIGZpbGUgYnkgaXRzIHVuaXF1ZSBpZGVudGlmaWVyLjwvcD4KPC9kaXY+CjxkaXYgY2xhc3M9ImdyaWQgZ3JpZC1jb2xzLTEgeGw6Z3JpZC1jb2xzLTIgZ2FwLXB4IGJnLXdoaXRlLzUiPgo8IS0tIFJlcXVlc3QgRGV0YWlscyAtLT4KPGRpdiBjbGFzcz0iYmctc3VyZmFjZS1kaW0gcC04Ij4KPGgzIGNsYXNzPSJmb250LWxhYmVsLXNtIHRleHQtbGFiZWwtc20gdGV4dC10ZXh0LW11dGVkIHVwcGVyY2FzZSB0cmFja2luZy13aWRlciBtYi00Ij5QYXRoIFBhcmFtZXRlcnM8L2gzPgo8ZGl2IGNsYXNzPSJzcGFjZS15LTQiPgo8ZGl2IGNsYXNzPSJib3JkZXItYiBib3JkZXItd2hpdGUvNSBwYi00Ij4KPGRpdiBjbGFzcz0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTIgbWItMSI+CjxzcGFuIGNsYXNzPSJmb250LWNvZGUgdGV4dC1jb2RlIHRleHQtb24tc3VyZmFjZSI+aWQ8L3NwYW4+CjxzcGFuIGNsYXNzPSJmb250LWxhYmVsLXNtIHRleHQtWzEycHhdIHRleHQtdGV4dC1tdXRlZCI+c3RyaW5nPC9zcGFuPgo8c3BhbiBjbGFzcz0iZm9udC1sYWJlbC1zbSB0ZXh0LVsxMnB4XSB0ZXh0LWVycm9yIHB4LTIgcHktMC41IHJvdW5kZWQgYmctZXJyb3ItY29udGFpbmVyLzIwIj5yZXF1aXJlZDwvc3Bhbj4KPC9kaXY+CjxwIGNsYXNzPSJmb250LWJvZHktbWQgdGV4dC1ib2R5LW1kIHRleHQtb24tc3VyZmFjZS12YXJpYW50IHRleHQtc20iPlRoZSB1bmlxdWUgaWRlbnRpZmllciBvZiB0aGUgbWVkaWEgb2JqZWN0LjwvcD4KPC9kaXY+CjwvZGl2Pgo8L2Rpdj4KPCEtLSBDb2RlIEV4YW1wbGUgLS0+CjxkaXYgY2xhc3M9ImJnLXN1cmZhY2UtZGltIGZsZXggZmxleC1jb2wgaC1mdWxsIj4KPGRpdiBjbGFzcz0iY29kZS1ibG9jay1oZWFkZXIgcHgtNCBweS0zIGZsZXggaXRlbXMtY2VudGVyIGp1c3RpZnktYmV0d2VlbiI+CjxzcGFuIGNsYXNzPSJmb250LWxhYmVsLXNtIHRleHQtbGFiZWwtc20gdGV4dC1vbi1zdXJmYWNlLXZhcmlhbnQiPlJlc3BvbnNlICgyMDAgT0spPC9zcGFuPgo8L2Rpdj4KPGRpdiBjbGFzcz0iY29kZS1ibG9jay1jb250ZW50IHAtNCBmbGV4LTEgb3ZlcmZsb3cteC1hdXRvIj4KPHByZSBjbGFzcz0iZm9udC1jb2RlIHRleHQtY29kZSB0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCBsZWFkaW5nLXJlbGF4ZWQiPnsKICA8c3BhbiBjbGFzcz0idG9rZW4gcHJvcGVydHkiPiJpZCI8L3NwYW4+OiA8c3BhbiBjbGFzcz0idG9rZW4gc3RyaW5nIj4ibWVkXzEyMzQ1Njc4OSI8L3NwYW4+PHNwYW4gY2xhc3M9InRva2VuIHB1bmN0dWF0aW9uIj4sPC9zcGFuPgogIDxzcGFuIGNsYXNzPSJ0b2tlbiBwcm9wZXJ0eSI+InVybCI8L3NwYW4+OiA8c3BhbiBjbGFzcz0idG9rZW4gc3RyaW5nIj4iaHR0cHM6Ly9tZWRpYS5kaHlleS5jYy8xMjM0NTY3ODkuanBnIjwvc3Bhbj48c3BhbiBjbGFzcz0idG9rZW4gcHVuY3R1YXRpb24iPiw8L3NwYW4+CiAgPHNwYW4gY2xhc3M9InRva2VuIHByb3BlcnR5Ij4idHlwZSI8L3NwYW4+OiA8c3BhbiBjbGFzcz0idG9rZW4gc3RyaW5nIj4iaW1hZ2UvanBlZyI8L3NwYW4+PHNwYW4gY2xhc3M9InRva2VuIHB1bmN0dWF0aW9uIj4sPC9zcGFuPgogIDxzcGFuIGNsYXNzPSJ0b2tlbiBwcm9wZXJ0eSI+InNpemUiPC9zcGFuPjogPHNwYW4gY2xhc3M9InRva2VuIG51bWJlciI+MTAyNDUwMDwvc3Bhbj48c3BhbiBjbGFzcz0idG9rZW4gcHVuY3R1YXRpb24iPiw8L3NwYW4+CiAgPHNwYW4gY2xhc3M9InRva2VuIHByb3BlcnR5Ij4iY3JlYXRlZF9hdCI8L3NwYW4+OiA8c3BhbiBjbGFzcz0idG9rZW4gc3RyaW5nIj4iMjAyMy0xMC0yN1QxMDowMDowMFoiPC9zcGFuPgp9CjwvcHJlPgo8L2Rpdj4KPC9kaXY+CjwvZGl2Pgo8L3NlY3Rpb24+CjwhLS0gRGVsZXRlIEVuZHBvaW50IC0tPgoKPCEtLSBVUkwgVXBsb2FkIEVuZHBvaW50IC0tPgo8c2VjdGlvbiBjbGFzcz0iZ2xhc3MtcGFuZWwgcm91bmRlZC14bCBvdmVyZmxvdy1oaWRkZW4gYm9yZGVyLXQgYm9yZGVyLWJvcmRlci1zdWJ0bGUgc2hhZG93LVswXzRweF8zMHB4X3JnYmEoMCwwLDAsMC41KV0iIGlkPSJ1cmwtdXBsb2FkIj4KPGRpdiBjbGFzcz0icC04IGJvcmRlci1iIGJvcmRlci13aGl0ZS81Ij4KPGRpdiBjbGFzcz0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTQgbWItNCI+CjxzcGFuIGNsYXNzPSJiZy1pbmRpZ28tOTAwLzMwIHRleHQtaW5kaWdvLTQwMCBib3JkZXIgYm9yZGVyLWluZGlnby01MDAvMzAgcHgtMyBweS0xIHJvdW5kZWQtZnVsbCBmb250LWNvZGUgdGV4dC1jb2RlIGZvbnQtYm9sZCI+R0VUPC9zcGFuPgo8Y29kZSBjbGFzcz0iZm9udC1jb2RlIHRleHQtYm9keS1tZCB0ZXh0LW9uLXN1cmZhY2UiPi9ob3N0dXJsPC9jb2RlPgo8L2Rpdj4KPGgyIGNsYXNzPSJmb250LXRpdGxlLW1kIHRleHQtdGl0bGUtbWQgdGV4dC1vbi1zdXJmYWNlIG1iLTMiPlVSTCBVcGxvYWQ8L2gyPgo8cCBjbGFzcz0iZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCI+VXBsb2FkcyBhIG1lZGlhIGZpbGUgZGlyZWN0bHkgZnJvbSBhIHJlbW90ZSBVUkwuPC9wPgo8L2Rpdj4KPGRpdiBjbGFzcz0iZ3JpZCBncmlkLWNvbHMtMSB4bDpncmlkLWNvbHMtMiBnYXAtcHggYmctd2hpdGUvNSI+CjxkaXYgY2xhc3M9ImJnLXN1cmZhY2UtZGltIHAtOCI+CjxoMyBjbGFzcz0iZm9udC1sYWJlbC1zbSB0ZXh0LWxhYmVsLXNtIHRleHQtdGV4dC1tdXRlZCB1cHBlcmNhc2UgdHJhY2tpbmctd2lkZXIgbWItNCI+UXVlcnkgUGFyYW1ldGVyczwvaDM+CjxkaXYgY2xhc3M9InNwYWNlLXktNCI+CjxkaXYgY2xhc3M9ImJvcmRlci1iIGJvcmRlci13aGl0ZS81IHBiLTQiPgo8ZGl2IGNsYXNzPSJmbGV4IGl0ZW1zLWNlbnRlciBnYXAtMiBtYi0xIj4KPHNwYW4gY2xhc3M9ImZvbnQtY29kZSB0ZXh0LWNvZGUgdGV4dC1vbi1zdXJmYWNlIj51cmw8L3NwYW4+CjxzcGFuIGNsYXNzPSJmb250LWxhYmVsLXNtIHRleHQtWzEycHhdIHRleHQtdGV4dC1tdXRlZCI+c3RyaW5nPC9zcGFuPgo8c3BhbiBjbGFzcz0iZm9udC1sYWJlbC1zbSB0ZXh0LVsxMnB4XSB0ZXh0LWVycm9yIHB4LTIgcHktMC41IHJvdW5kZWQgYmctZXJyb3ItY29udGFpbmVyLzIwIj5yZXF1aXJlZDwvc3Bhbj4KPC9kaXY+CjxwIGNsYXNzPSJmb250LWJvZHktbWQgdGV4dC1ib2R5LW1kIHRleHQtb24tc3VyZmFjZS12YXJpYW50IHRleHQtc20iPlRoZSBkaXJlY3QgVVJMIG9mIHRoZSBpbWFnZSBvciB2aWRlbyB0byB1cGxvYWQuPC9wPgo8L2Rpdj4KPC9kaXY+CjwvZGl2Pgo8ZGl2IGNsYXNzPSJiZy1zdXJmYWNlLWRpbSBmbGV4IGZsZXgtY29sIGgtZnVsbCI+CjxkaXYgY2xhc3M9ImNvZGUtYmxvY2staGVhZGVyIHB4LTQgcHktMyBmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4iPgo8c3BhbiBjbGFzcz0iZm9udC1sYWJlbC1zbSB0ZXh0LWxhYmVsLXNtIHRleHQtb24tc3VyZmFjZS12YXJpYW50Ij5SZXNwb25zZSAoMjAwIE9LKTwvc3Bhbj4KPC9kaXY+CjxkaXYgY2xhc3M9ImNvZGUtYmxvY2stY29udGVudCBwLTQgZmxleC0xIG92ZXJmbG93LXgtYXV0byI+CjxwcmUgY2xhc3M9ImZvbnQtY29kZSB0ZXh0LWNvZGUgdGV4dC1vbi1zdXJmYWNlLXZhcmlhbnQgbGVhZGluZy1yZWxheGVkIj57CiAgPHNwYW4gY2xhc3M9InRva2VuIHByb3BlcnR5Ij4idXJsIjwvc3Bhbj46IDxzcGFuIGNsYXNzPSJ0b2tlbiBzdHJpbmciPiJodHRwczovL21lZGlhLmRoeWV5LmNjLzEyMzQ1Njc4OS5qcGciPC9zcGFuPgp9CjwvcHJlPgo8L2Rpdj4KPC9kaXY+CjwvZGl2Pgo8L3NlY3Rpb24+CjwhLS0gV2FsbHBhcGVycyBFbmRwb2ludCAtLT4KPHNlY3Rpb24gY2xhc3M9ImdsYXNzLXBhbmVsIHJvdW5kZWQteGwgb3ZlcmZsb3ctaGlkZGVuIGJvcmRlci10IGJvcmRlci1ib3JkZXItc3VidGxlIHNoYWRvdy1bMF80cHhfMzBweF9yZ2JhKDAsMCwwLDAuNSldIiBpZD0id2FsbHBhcGVycyI+CjxkaXYgY2xhc3M9InAtOCBib3JkZXItYiBib3JkZXItd2hpdGUvNSI+CjxkaXYgY2xhc3M9ImZsZXggaXRlbXMtY2VudGVyIGdhcC00IG1iLTQiPgo8c3BhbiBjbGFzcz0iYmctdGVhbC05MDAvMzAgdGV4dC10ZWFsLTQwMCBib3JkZXIgYm9yZGVyLXRlYWwtNTAwLzMwIHB4LTMgcHktMSByb3VuZGVkLWZ1bGwgZm9udC1jb2RlIHRleHQtY29kZSBmb250LWJvbGQiPkdFVDwvc3Bhbj4KPGNvZGUgY2xhc3M9ImZvbnQtY29kZSB0ZXh0LWJvZHktbWQgdGV4dC1vbi1zdXJmYWNlIj4vd2FsbHBhcGVyczwvY29kZT4KPC9kaXY+CjxoMiBjbGFzcz0iZm9udC10aXRsZS1tZCB0ZXh0LXRpdGxlLW1kIHRleHQtb24tc3VyZmFjZSBtYi0zIj5XYWxscGFwZXJzPC9oMj4KPHAgY2xhc3M9ImZvbnQtYm9keS1tZCB0ZXh0LWJvZHktbWQgdGV4dC1vbi1zdXJmYWNlLXZhcmlhbnQiPlJldHJpZXZlcyBhIGN1cmF0ZWQgbGlzdCBvZiBoaWdoLXF1YWxpdHkgd2FsbHBhcGVycyAoc291cmNlZCBmcm9tIEJpbmcpLjwvcD4KPC9kaXY+CjxkaXYgY2xhc3M9ImdyaWQgZ3JpZC1jb2xzLTEgeGw6Z3JpZC1jb2xzLTIgZ2FwLXB4IGJnLXdoaXRlLzUiPgo8ZGl2IGNsYXNzPSJiZy1zdXJmYWNlLWRpbSBwLTgiPgo8cCBjbGFzcz0iZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCB0ZXh0LXNtIj5ObyBwYXJhbWV0ZXJzIHJlcXVpcmVkLjwvcD4KPC9kaXY+CjxkaXYgY2xhc3M9ImJnLXN1cmZhY2UtZGltIGZsZXggZmxleC1jb2wgaC1mdWxsIj4KPGRpdiBjbGFzcz0iY29kZS1ibG9jay1oZWFkZXIgcHgtNCBweS0zIGZsZXggaXRlbXMtY2VudGVyIGp1c3RpZnktYmV0d2VlbiI+CjxzcGFuIGNsYXNzPSJmb250LWxhYmVsLXNtIHRleHQtbGFiZWwtc20gdGV4dC1vbi1zdXJmYWNlLXZhcmlhbnQiPlJlc3BvbnNlICgyMDAgT0spPC9zcGFuPgo8L2Rpdj4KPGRpdiBjbGFzcz0iY29kZS1ibG9jay1jb250ZW50IHAtNCBmbGV4LTEgb3ZlcmZsb3cteC1hdXRvIj4KPHByZSBjbGFzcz0iZm9udC1jb2RlIHRleHQtY29kZSB0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCBsZWFkaW5nLXJlbGF4ZWQiPlsKICB7CiAgICA8c3BhbiBjbGFzcz0idG9rZW4gcHJvcGVydHkiPiJ1cmwiPC9zcGFuPjogPHNwYW4gY2xhc3M9InRva2VuIHN0cmluZyI+Imh0dHBzOi8vLi4uIjwvc3Bhbj48c3BhbiBjbGFzcz0idG9rZW4gcHVuY3R1YXRpb24iPiw8L3NwYW4+CiAgICA8c3BhbiBjbGFzcz0idG9rZW4gcHJvcGVydHkiPiJ0aXRsZSI8L3NwYW4+OiA8c3BhbiBjbGFzcz0idG9rZW4gc3RyaW5nIj4iV2FsbHBhcGVyIFRpdGxlIjwvc3Bhbj48c3BhbiBjbGFzcz0idG9rZW4gcHVuY3R1YXRpb24iPiw8L3NwYW4+CiAgICA8c3BhbiBjbGFzcz0idG9rZW4gcHJvcGVydHkiPiJjb3B5cmlnaHQiPC9zcGFuPjogPHNwYW4gY2xhc3M9InRva2VuIHN0cmluZyI+IkNvcHlyaWdodCBpbmZvIjwvc3Bhbj4KICB9Cl0KPC9wcmU+CjwvZGl2Pgo8L2Rpdj4KPC9kaXY+Cjwvc2VjdGlvbj4KPC9tYWluPgo8L2Rpdj4KPCEtLSBGb290ZXIgLS0+Cgo8c2NyaXB0PgogICAgICAgIC8vIFNpbXBsZSBhY3RpdmUgc3RhdGUgdG9nZ2xlIGZvciBzaWRlYmFyCiAgICAgICAgY29uc3QgbmF2SXRlbXMgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yQWxsKCcubmF2LWl0ZW0nKTsKICAgICAgICBuYXZJdGVtcy5mb3JFYWNoKGl0ZW0gPT4gewogICAgICAgICAgICBpdGVtLmFkZEV2ZW50TGlzdGVuZXIoJ2NsaWNrJywgKGUpID0+IHsKICAgICAgICAgICAgICAgIG5hdkl0ZW1zLmZvckVhY2gobmF2ID0+IHsKICAgICAgICAgICAgICAgICAgICBuYXYuY2xhc3NMaXN0LnJlbW92ZSgnYWN0aXZlJywgJ2JvcmRlci1sLTInLCAnYm9yZGVyLXByaW1hcnknKTsKICAgICAgICAgICAgICAgICAgICBuYXYuY2xhc3NMaXN0LmFkZCgnYm9yZGVyLWwtMicsICdib3JkZXItdHJhbnNwYXJlbnQnLCAndGV4dC1vbi1zdXJmYWNlLXZhcmlhbnQnKTsKICAgICAgICAgICAgICAgICAgICBuYXYuY2xhc3NMaXN0LnJlbW92ZSgndGV4dC1wcmltYXJ5Jyk7CiAgICAgICAgICAgICAgICB9KTsKICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgZS50YXJnZXQuY2xhc3NMaXN0LmFkZCgnYWN0aXZlJyk7CiAgICAgICAgICAgICAgICBlLnRhcmdldC5jbGFzc0xpc3QucmVtb3ZlKCdib3JkZXItbC0yJywgJ2JvcmRlci10cmFuc3BhcmVudCcsICd0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCcpOwogICAgICAgICAgICAgICAgZS50YXJnZXQuY2xhc3NMaXN0LmFkZCgndGV4dC1wcmltYXJ5Jyk7CiAgICAgICAgICAgIH0pOwogICAgICAgIH0pOwogICAgPC9zY3JpcHQ+CjwvYm9keT48L2h0bWw+Cgo=");
-  return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+  const html = `
+  <html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="description" content="AR Hosting API Documentation - Free image and video hosting service with Telegram integration">
+  <meta name="keywords" content="AR Hosting, API, image hosting, video hosting, Media hosting, Telegram bot, cloud storage">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API Documentation - AR Hosting</title>
+  <link rel="manifest" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Files/manifest.json">
+  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"></noscript>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+</head>
+
+<body class="min-h-screen antialiased text-zinc-100 selection:bg-orange-400/20 selection:text-orange-200" style="
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+    background-color:#000;
+    background-attachment: fixed;
+    scroll-behavior: smooth;
+    background-image:
+      radial-gradient(900px 600px at 15% 10%, rgba(251, 113, 133, 0.12), transparent 60%),
+      radial-gradient(900px 600px at 85% 25%, rgba(251, 146, 60, 0.12), transparent 60%),
+      radial-gradient(1100px 700px at 50% 95%, rgba(217, 119, 6, 0.10), transparent 60%);
+  ">
+
+  <!-- Ambient overlay (subtle grain) -->
+  <div class="pointer-events-none fixed inset-0 -z-10 opacity-40" style="background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px); background-size: 32px 32px;">
+  </div>
+
+  <!-- Page Loader -->
+  <div id="page-loader" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md opacity-100 transition-opacity duration-500">
+    <div class="group inline-flex items-center gap-3 rounded-2xl ring-1 ring-white/10 bg-zinc-950/70 px-4 py-3 shadow-2xl shadow-black/60" style="transform: translateZ(0);">
+      <div class="relative">
+        <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="AR Hosting Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
+        <div class="absolute -inset-2 rounded-full opacity-70 blur-xl" style="background: radial-gradient(circle, rgba(251,146,60,0.35), transparent 60%);">
+        </div>
+      </div>
+      <div class="inline-flex items-center gap-2 text-zinc-200">
+        <span class="iconify h-5 w-5 animate-spin" data-icon="lucide:loader-2" data-inline="false"></span>
+        <span class="text-sm font-medium">Loading</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scroll Progress -->
+  <div class="fixed left-0 top-0 z-[55] h-0.5 w-full bg-white/5">
+    <div id="scrollbar" class="h-full w-0 bg-gradient-to-r from-orange-300 via-amber-300 to-rose-300" style="box-shadow: 0 0 24px rgba(251,146,60,0.35);"></div>
+  </div>
+
+  <!-- Top Nav -->
+  <header class="fixed inset-x-0 top-0 z-50">
+    <nav id="top-nav" class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6 backdrop-blur-xl border-b border-white/10 transition-all duration-300" style="background: linear-gradient(to bottom, rgba(10,10,10,0.72), rgba(10,10,10,0.55));">
+      <a href="https://ar-hosting.pages.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
+        <div class="relative">
+          <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="AR Hosting Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
+          <div class="absolute -inset-2 rounded-full opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" style="background: radial-gradient(circle, rgba(251,146,60,0.45), transparent 60%);">
+          </div>
+        </div>
+        <span class="text-lg font-semibold tracking-tight bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
+          AR Hosting
+        </span>
+      </a>
+
+      <div class="hidden md:flex items-center gap-6">
+        <a href="#api" class="text-sm font-medium text-zinc-300 hover:text-orange-200 hover:underline underline-offset-4 decoration-white/15 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-lg px-1.5 py-1">API Docs</a>
+        <a href="#telegram" class="text-sm font-medium text-zinc-300 hover:text-orange-200 hover:underline underline-offset-4 decoration-white/15 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-lg px-1.5 py-1">Telegram Bot</a>
+        <a href="#about" class="text-sm font-medium text-zinc-300 hover:text-orange-200 hover:underline underline-offset-4 decoration-white/15 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-lg px-1.5 py-1">About</a>
+      </div>
+
+      <div class="hidden md:flex items-center gap-3">
+        <a href="https://t.me/AR_UrlUploaderBot" target="_blank" class="group inline-flex items-center gap-2 rounded-full px-4 py-2 text-zinc-950 font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+          <span class="iconify h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" data-icon="lucide:send" data-inline="false"></span>
+          <span>Upload via Bot</span>
+        </a>
+      </div>
+
+      <button id="menu-toggle" class="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30" aria-label="Open navigation menu" aria-expanded="false">
+        <span class="iconify h-5 w-5" data-icon="lucide:menu" data-inline="false"></span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Mobile Menu -->
+  <div id="mobile-nav" class="fixed inset-0 z-40 hidden">
+    <div id="mobile-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-md opacity-0 transition-opacity duration-300"></div>
+
+    <div class="relative mx-auto max-w-sm px-4 pt-20">
+      <div id="mobile-panel" class="rounded-2xl border border-white/10 bg-zinc-950/80 ring-1 ring-white/10 divide-y divide-white/10 opacity-0 translate-y-2 transition-all duration-300 shadow-2xl shadow-black/60" style="transform: translateZ(0);">
+        <div class="p-4">
+          <a href="https://ar-hosting.pages.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
+            <img src="https://i.ibb.co/ZSfVw8V/image.png" alt="AR Hosting Logo" class="h-8 w-8 rounded-full ring-1 ring-white/10">
+            <span class="text-base font-semibold tracking-tight bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
+              AR Hosting
+            </span>
+          </a>
+        </div>
+
+        <div class="p-2">
+          <a href="#api" class="mobile-link block rounded-xl px-4 py-3 text-zinc-100 hover:text-orange-200 hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">API Docs</a>
+          <a href="#telegram" class="mobile-link block rounded-xl px-4 py-3 text-zinc-100 hover:text-orange-200 hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">Telegram Bot</a>
+          <a href="#about" class="mobile-link block rounded-xl px-4 py-3 text-zinc-100 hover:text-orange-200 hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">About</a>
+        </div>
+
+        <div class="p-4">
+          <a href="https://t.me/AR_UrlUploaderBot" target="_blank" class="mobile-link inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-zinc-950 font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+            <span class="iconify h-4 w-4" data-icon="lucide:send" data-inline="false"></span>
+            <span>Upload via Bot</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating action: Back to top -->
+  <button id="to-top" class="fixed bottom-5 right-5 z-40 hidden items-center gap-2 rounded-full px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-white/10 bg-zinc-950/60 backdrop-blur-md shadow-lg shadow-black/50 hover:bg-zinc-950/75 hover:text-orange-200 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30">
+    <span class="iconify h-4 w-4" data-icon="lucide:arrow-up" data-inline="false"></span>
+    Top
+  </button>
+
+  <main class="pt-24">
+    <!-- Hero -->
+    <section class="mx-auto max-w-4xl px-4 text-center md:px-6" data-reveal="">
+      <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-orange-200 ring-1 ring-orange-300/20 bg-orange-500/10">
+        <span class="iconify h-3.5 w-3.5" data-icon="lucide:sparkles" data-inline="false"></span>
+        <span>Ashlynn Repository</span>
+      </div>
+
+      <h1 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
+        AR Hosting API Documentation
+      </h1>
+
+      <p class="mt-4 text-sm text-zinc-400 sm:text-base">
+        Free, fast, and reliable media hosting service with Telegram integration. Upload images and videos directly or via URL with our simple API.
+      </p>
+
+      <div class="mt-6 flex flex-wrap justify-center gap-3">
+        <a href="#api" class="group inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-zinc-950 font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+          <span class="iconify h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" data-icon="lucide:code-2" data-inline="false"></span>
+          <span>View API Docs</span>
+        </a>
+
+        <a href="https://t.me/AR_UrlUploaderBot" target="_blank" class="group inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2.5 text-zinc-100 font-medium ring-1 ring-white/10 hover:bg-white/8 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30">
+          <span class="iconify h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" data-icon="lucide:send" data-inline="false"></span>
+          <span>Try Telegram Bot</span>
+        </a>
+      </div>
+
+      <div class="mt-8 mx-auto max-w-3xl rounded-2xl border border-white/10 bg-white/[0.03] ring-1 ring-white/10 backdrop-blur-md p-4 sm:p-5 text-left" style="box-shadow: 0 20px 80px rgba(0,0,0,0.65);">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center gap-2 text-sm text-zinc-300">
+            <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:link" data-inline="false"></span>
+            <span class="font-medium text-zinc-100">Quick Start:</span>
+            <span class="text-zinc-400">Upload a file with</span>
+            <code class="rounded bg-black/60 px-2 py-0.5 text-xs text-orange-200 ring-1 ring-white/10">POST /upload</code>
+          </div>
+          <a href="#api" class="text-sm font-medium text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">Jump to endpoints</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feature Cards -->
+    <section class="mx-auto mt-10 max-w-6xl px-4 md:px-6">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 ring-1 ring-white/10 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.05]" style="box-shadow: 0 20px 80px rgba(0,0,0,0.35);" data-reveal="">
+          <div class="flex flex-col items-center text-center">
+            <div class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl ring-1 ring-orange-300/20 bg-orange-500/10 text-orange-200 transition-transform duration-300 group-hover:scale-105">
+              <span class="iconify h-6 w-6" data-icon="lucide:zap" data-inline="false"></span>
+            </div>
+            <h4 class="text-lg font-medium text-white">Fast Uploads</h4>
+            <p class="mt-2 text-sm text-zinc-400">Upload and retrieve your media files in seconds with our optimized infrastructure.</p>
+          </div>
+        </div>
+
+        <div class="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 ring-1 ring-white/10 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.05]" style="box-shadow: 0 20px 80px rgba(0,0,0,0.35);" data-reveal="">
+          <div class="flex flex-col items-center text-center">
+            <div class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl ring-1 ring-orange-300/20 bg-orange-500/10 text-orange-200 transition-transform duration-300 group-hover:scale-105">
+              <span class="iconify h-6 w-6" data-icon="lucide:shield" data-inline="false"></span>
+            </div>
+            <h4 class="text-lg font-medium text-white">Secure Storage</h4>
+            <p class="mt-2 text-sm text-zinc-400">Your files are stored securely using Telegram's robust cloud storage infrastructure.</p>
+          </div>
+        </div>
+
+        <div class="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 ring-1 ring-white/10 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.05]" style="box-shadow: 0 20px 80px rgba(0,0,0,0.35);" data-reveal="">
+          <div class="flex flex-col items-center text-center">
+            <div class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl ring-1 ring-orange-300/20 bg-orange-500/10 text-orange-200 transition-transform duration-300 group-hover:scale-105">
+              <span class="iconify h-6 w-6" data-icon="lucide:bot" data-inline="false"></span>
+            </div>
+            <h4 class="text-lg font-medium text-white">Telegram Integration</h4>
+            <p class="mt-2 text-sm text-zinc-400">Upload files directly from Telegram using our dedicated bot for seamless integration.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- API Docs -->
+    <section id="api" class="scroll-mt-24 mx-auto mt-10 max-w-6xl px-4 md:px-6">
+      <div class="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl ring-1 ring-white/10 shadow-2xl shadow-black/60" style="transform: translateZ(0);" data-reveal="">
+        <div class="p-6 sm:p-8">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">API Documentation</h2>
+              <div class="mt-2 inline-flex items-center gap-2 text-sm text-zinc-400">
+                <span class="iconify h-4 w-4" data-icon="lucide:clock" data-inline="false"></span>
+                <span><span class="font-medium text-zinc-300">Last Updated:</span> July 20, 2025</span>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="expand-all" class="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-white/10 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">
+                <span class="iconify h-4 w-4" data-icon="lucide:unfold-vertical" data-inline="false"></span>
+                Expand all
+              </button>
+              <button id="collapse-all" class="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-white/10 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">
+                <span class="iconify h-4 w-4" data-icon="lucide:fold-vertical" data-inline="false"></span>
+                Collapse all
+              </button>
+            </div>
+          </div>
+
+          <p class="mt-4 text-sm text-zinc-300 sm:text-base">
+            This documentation provides a comprehensive guide on how to use the <span class="font-medium">Ashlynn Repository API</span> to upload media files to the platform.
+          </p>
+
+          <!-- Endpoints -->
+          <div class="mt-6 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
+            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#endpoints-panel" aria-expanded="true">
+              <div class="flex items-center gap-2">
+                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:route" data-inline="false"></span>
+                <h3 class="text-lg font-medium text-amber-200">Endpoints</h3>
+              </div>
+              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
+            </button>
+            <div id="endpoints-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
+              <ul class="mt-1 space-y-2 text-zinc-300">
+                <li class="text-sm">
+                  <span class="font-medium text-white">POST</span>
+                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">/upload</code>
+                  - Direct file upload via form data.
+                </li>
+                <li class="text-sm">
+                  <span class="font-medium text-white">GET</span>
+                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">/hosturl?url=[media_url]</code>
+                  - Uploads media from a specified URL.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Base URLs -->
+          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
+            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#baseurls-panel" aria-expanded="true">
+              <div class="flex items-center gap-2">
+                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:globe" data-inline="false"></span>
+                <h3 class="text-lg font-medium text-amber-200">Base URLs</h3>
+              </div>
+              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
+            </button>
+            <div id="baseurls-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
+              <ul class="mt-1 space-y-2 text-zinc-300">
+                <li class="text-sm">
+                  <span class="font-medium text-white">POST:</span>
+                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://ar-hosting.pages.dev/upload</code>
+                </li>
+                <li class="text-sm">
+                  <span class="font-medium text-white">GET:</span>
+                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://ar-hosting.pages.dev/hosturl?url=[media_url]</code>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- POST Method -->
+          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
+            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#post-panel" aria-expanded="true">
+              <div class="flex items-center gap-2">
+                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:upload" data-inline="false"></span>
+                <h3 class="text-lg font-medium text-amber-200">POST Method</h3>
+              </div>
+              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
+            </button>
+            <div id="post-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
+              <p class="mt-1 text-sm text-zinc-300 sm:text-base">
+                Uploads a media file (image, video, or any other type of media) directly using multipart/form-data. This method is ideal for client-side form submissions.
+              </p>
+              <p class="mt-2 text-sm text-zinc-300 sm:text-base">
+                <span class="font-medium">Header:</span>
+                <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">Content-Type: multipart/form-data</code>
+                (Required)
+              </p>
+
+              <h4 class="mt-4 text-base font-medium text-white">Form Data Parameters</h4>
+              <div class="mt-2 overflow-x-auto rounded-xl ring-1 ring-white/10 border border-white/10">
+                <table class="min-w-[720px] w-full text-left text-sm">
+                  <thead class="text-zinc-100" style="background: linear-gradient(90deg, rgba(251,146,60,0.22), rgba(244,63,94,0.16));">
+                    <tr>
+                      <th class="px-4 py-3 font-medium">Parameter</th>
+                      <th class="px-4 py-3 font-medium">Type</th>
+                      <th class="px-4 py-3 font-medium">Required</th>
+                      <th class="px-4 py-3 font-medium">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-white/10">
+                    <tr class="bg-white/[0.03]">
+                      <td class="px-4 py-3">
+                        <code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">file</code>
+                      </td>
+                      <td class="px-4 py-3 text-zinc-300">file</td>
+                      <td class="px-4 py-3 text-zinc-300">Yes</td>
+                      <td class="px-4 py-3 text-zinc-300">The media file to be uploaded (image, video, or any other type of media). Must not exceed 20MB in size.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <h4 class="mt-6 text-base font-medium text-white">Usage Example (cURL)</h4>
+              <div class="relative mt-2">
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-code">curl -X POST https://ar-hosting.pages.dev/upload \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@path/to/your/file.jpg"</code></pre>
+                <button data-copy="#bash-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
+                  Copy
+                </button>
+              </div>
+
+              <h4 class="mt-6 text-base font-medium text-white">Usage Example (JavaScript - Fetch API)</h4>
+              <div class="relative mt-2">
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="js-code">const fileInput = document.querySelector('input[type="file"]');
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+
+  fetch('https://ar-hosting.pages.dev/upload', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response =&gt; response.json())
+  .then(data =&gt; console.log(data))
+  .catch(error =&gt; console.error('Error:', error));</code></pre>
+                <button data-copy="#js-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- GET Method -->
+          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
+            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#get-panel" aria-expanded="true">
+              <div class="flex items-center gap-2">
+                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:download" data-inline="false"></span>
+                <h3 class="text-lg font-medium text-amber-200">GET Method</h3>
+              </div>
+              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
+            </button>
+            <div id="get-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
+              <p class="mt-1 text-sm text-zinc-300 sm:text-base">
+                Fetches and uploads media from a provided URL. This method is suitable for uploading media files already hosted online.
+              </p>
+              <p class="mt-2 text-sm text-zinc-300 sm:text-base">
+                <span class="font-medium">Usage:</span>
+                <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">GET /hosturl?url=[media_url]</code>
+              </p>
+
+              <h4 class="mt-4 text-base font-medium text-white">Parameters</h4>
+              <div class="mt-2 overflow-x-auto rounded-xl ring-1 ring-white/10 border border-white/10">
+                <table class="min-w-[720px] w-full text-left text-sm">
+                  <thead class="text-zinc-100" style="background: linear-gradient(90deg, rgba(251,146,60,0.22), rgba(244,63,94,0.16));">
+                    <tr>
+                      <th class="px-4 py-3 font-medium">Parameter</th>
+                      <th class="px-4 py-3 font-medium">Type</th>
+                      <th class="px-4 py-3 font-medium">Required</th>
+                      <th class="px-4 py-3 font-medium">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-white/10">
+                    <tr class="bg-white/[0.03]">
+                      <td class="px-4 py-3">
+                        <code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">url</code>
+                      </td>
+                      <td class="px-4 py-3 text-zinc-300">string</td>
+                      <td class="px-4 py-3 text-zinc-300">Yes</td>
+                      <td class="px-4 py-3 text-zinc-300">The URL of the media file to upload (image or video, max 20MB).</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <h4 class="mt-6 text-base font-medium text-white">Usage Example</h4>
+              <div class="relative mt-2">
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-get-code">https://ar-hosting.pages.dev/hosturl?url=https://example.com/path/to/media.jpg</code></pre>
+                <button data-copy="#bash-get-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Responses -->
+          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
+            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#responses-panel" aria-expanded="true">
+              <div class="flex items-center gap-2">
+                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:braces" data-inline="false"></span>
+                <h3 class="text-lg font-medium text-amber-200">Response Formats</h3>
+              </div>
+              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
+            </button>
+
+            <div id="responses-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
+              <h3 class="mt-2 text-lg font-medium text-amber-200">Response Format (Success)</h3>
+              <p class="mt-2 text-sm text-zinc-300 sm:text-base">A successful upload will return a JSON object with the following details:</p>
+              <div class="relative mt-2">
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="success-response-code">{
+    "data": "https://ar-hosting.pages.dev/1753020712833.png",
+    "url": "https://ar-hosting.pages.dev/1753020712833.png",
+    "filename": "2nNV2I4.png",
+    "size": 83638,
+    "uploaded_on": "2025-07-20T14:11:52.833Z",
+    "media_type": "image/png",
+    "creator": "https://t.me/Ashlynn_Repository"
+  }</code></pre>
+                <button data-copy="#success-response-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
+                  Copy
+                </button>
+              </div>
+
+              <ul class="mt-3 space-y-1 text-sm text-zinc-300">
+                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">data</code>: The direct URL of the uploaded media file.</li>
+                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">url</code>: (Alias for <code class="rounded bg-orange-500/15 px-1 py-0.5 text-orange-200 ring-1 ring-orange-300/10">data</code>) The direct URL of the uploaded media file.</li>
+                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">filename</code>: The original filename of the uploaded media.</li>
+                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">size</code>: The size of the uploaded file in bytes.</li>
+                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">uploaded_on</code>: The timestamp when the file was uploaded (ISO 8601 format).</li>
+                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">media_type</code>: The MIME type of the uploaded media (e.g., 'image/png', 'video/mp4').</li>
+                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">creator</code>: A link to the creator's Telegram channel.</li>
+              </ul>
+
+              <h3 class="mt-8 text-lg font-medium text-amber-200">Response Format (Error)</h3>
+              <p class="mt-2 text-sm text-zinc-300 sm:text-base">
+                In case of an error, especially with the <code class="rounded bg-orange-500/15 px-1 py-0.5 text-orange-200 ring-1 ring-orange-300/10">url</code> parameter for the GET method, an error JSON object will be returned:
+              </p>
+              <div class="relative mt-2">
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="error-response-code">{
+    "error": "Failed to download file from URL"
+  }</code></pre>
+                <button data-copy="#error-response-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
+            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#notes-panel" aria-expanded="true">
+              <div class="flex items-center gap-2">
+                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:sticky-note" data-inline="false"></span>
+                <h3 class="text-lg font-medium text-amber-200">Notes</h3>
+              </div>
+              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
+            </button>
+            <div id="notes-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
+              <ul class="mt-1 space-y-2 text-sm text-zinc-300">
+                <li><span class="font-medium">POST Method:</span> Best for uploading files directly from user input (e.g., via an HTML form).</li>
+                <li><span class="font-medium">GET Method:</span> Ideal for programmatically uploading files that are already accessible via a public URL.</li>
+                <li>All uploaded media is subject to a <span class="font-medium text-white">20MB file size limit</span>.</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Telegram -->
+    <section id="telegram" class="scroll-mt-24 mx-auto mt-10 max-w-6xl px-4 md:px-6">
+      <div class="rounded-3xl border border-orange-300/15 bg-white/[0.03] ring-1 ring-white/10 shadow-2xl shadow-black/55" style="transform: translateZ(0);" data-reveal="">
+        <div class="p-6 sm:p-8">
+          <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">Telegram Bot Integration</h2>
+          <p class="mt-3 text-sm text-zinc-300 sm:text-base">
+            Now you can directly upload media to AR Hosting using our dedicated Telegram bot
+            <strong><a href="https://t.me/AR_UrlUploaderBot" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">@AR_UrlUploaderBot</a></strong>.
+            This offers a convenient way to host files without needing to interact directly with the API.
+          </p>
+
+          <h3 class="mt-6 text-lg font-medium text-amber-200">How to Use the Telegram Bot</h3>
+          <ol class="mt-2 list-decimal pl-5 space-y-2 text-sm text-zinc-300 sm:text-base">
+            <li>Start a chat with <a href="https://t.me/AR_UrlUploaderBot" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">@AR_UrlUploaderBot</a> on Telegram.</li>
+            <li><strong class="text-white">Direct File Upload:</strong> Send any image, video, or media file directly to the bot.</li>
+            <li><strong class="text-white">URL Upload:</strong> Alternatively, send a URL containing a media file. Our bot will automatically download and upload it for you.</li>
+            <li>The bot will process your request and return the direct AR Hosting URL for your uploaded media.</li>
+          </ol>
+
+          <h3 class="mt-6 text-lg font-medium text-amber-200">Bot Commands</h3>
+          <div class="mt-2 overflow-x-auto rounded-xl ring-1 ring-white/10 border border-white/10">
+            <table class="min-w-[560px] w-full text-left text-sm">
+              <thead class="text-zinc-100" style="background: linear-gradient(90deg, rgba(251,146,60,0.22), rgba(244,63,94,0.16));">
+                <tr>
+                  <th class="px-4 py-3 font-medium">Command</th>
+                  <th class="px-4 py-3 font-medium">Description</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/10">
+                <tr class="bg-white/[0.03]">
+                  <td class="px-4 py-3"><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">/start</code></td>
+                  <td class="px-4 py-3 text-zinc-300">Get a welcome message and basic instructions.</td>
+                </tr>
+                <tr class="bg-white/[0.03]">
+                  <td class="px-4 py-3"><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">/help</code></td>
+                  <td class="px-4 py-3 text-zinc-300">Show detailed help information and available features.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-6 flex flex-wrap gap-3">
+            <a href="https://t.me/AR_UrlUploaderBot" target="_blank" class="group inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-zinc-950 font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
+              <span class="iconify h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" data-icon="lucide:send" data-inline="false"></span>
+              <span>Start Using the Bot</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- About -->
+    <section id="about" class="scroll-mt-24 mx-auto mt-10 mb-16 max-w-6xl px-4 md:px-6">
+      <div class="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl ring-1 ring-white/10 shadow-2xl shadow-black/55" style="transform: translateZ(0);" data-reveal="">
+        <div class="p-6 sm:p-8">
+          <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">About Us</h2>
+          <div class="mt-3 space-y-3 text-sm text-zinc-300 sm:text-base">
+            <p>Welcome to <strong class="text-white">AR Hosting</strong> — your trusted platform for free image, video, and general media hosting. Designed with an emphasis on <strong class="text-white">simplicity, speed, and security</strong>, AR Hosting offers a seamless and efficient experience for uploading and sharing your digital content. Developed by <strong class="text-white">Ashlynn Repository</strong>, our service is built on a foundation of robust privacy protections to ensure your data remains safe and secure.</p>
+            <p>Our platform leverages Telegram's cutting-edge cloud storage infrastructure, providing you with reliable and easily accessible media storage, whenever and wherever you need it.</p>
+            <p><strong class="text-white">About Ashlynn Repository:</strong> Ashlynn Repository is a dynamic Telegram channel managed by Aarabh (known as itz_ashlynn), who specializes in developing advanced Telegram bots, powerful APIs, and innovative web applications. You can explore all the latest tools, projects, and updates directly on their Telegram channel: <a href="https://t.me/Ashlynn_Repository" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">Ashlynn Repository</a>.</p>
+            <p><strong class="text-white">Disclaimer:</strong> AR Hosting is an independent project created solely for educational and demonstrative purposes and is not affiliated with or endorsed by Telegram. Users are solely responsible for the content they upload; AR Hosting does not claim any rights over user-uploaded media. By using our platform, users agree that they retain all responsibility for compliance with relevant copyright laws and regulations.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/10">
+    <div class="mx-auto max-w-7xl px-4 py-6 md:px-6">
+      <div class="flex flex-col items-center gap-3">
+        <p class="text-sm text-zinc-400 text-center">
+          © 2025 AR HOSTING. All rights reserved. Developed by
+          <a href="https://t.me/Ashlynn_Repository" target="_blank" class="text-orange-200 hover:text-orange-100 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded">
+            Ashlynn Repository
+          </a>.
+        </p>
+
+        <div class="inline-flex items-center gap-4">
+          <a href="https://t.me/Ashlynn_Repository" target="_blank" aria-label="Telegram Channel" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
+            <span class="iconify h-5 w-5" data-icon="lucide:send" data-inline="false"></span>
+          </a>
+
+          <a href="https://github.com/itz-ashlynn" target="_blank" aria-label="GitHub Profile" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
+            <span class="iconify h-5 w-5" data-icon="lucide:github" data-inline="false"></span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const menuBtn = document.getElementById('menu-toggle');
+      const mobileNav = document.getElementById('mobile-nav');
+      const mobileBackdrop = document.getElementById('mobile-backdrop');
+      const mobilePanel = document.getElementById('mobile-panel');
+      const loader = document.getElementById('page-loader');
+      const nav = document.getElementById('top-nav');
+      const toTop = document.getElementById('to-top');
+      const scrollbar = document.getElementById('scrollbar');
+
+      // Header scroll state + progress
+      const onScroll = () => {
+        const y = window.scrollY || 0;
+
+        if (y > 10) {
+          nav.classList.add('shadow-lg','shadow-black/40');
+          nav.style.background = 'linear-gradient(to bottom, rgba(0,0,0,0.82), rgba(0,0,0,0.58))';
+        } else {
+          nav.classList.remove('shadow-lg','shadow-black/40');
+          nav.style.background = 'linear-gradient(to bottom, rgba(10,10,10,0.72), rgba(10,10,10,0.55))';
+        }
+
+        const doc = document.documentElement;
+        const scrollTop = doc.scrollTop || document.body.scrollTop;
+        const height = (doc.scrollHeight - doc.clientHeight) || 1;
+        const progress = Math.max(0, Math.min(1, scrollTop / height));
+        if (scrollbar) scrollbar.style.width = (progress * 100).toFixed(2) + '%';
+
+        if (toTop) {
+          if (y > 700) toTop.classList.remove('hidden');
+          else toTop.classList.add('hidden');
+        }
+      };
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+
+      if (toTop) {
+        toTop.addEventListener('click', () => {
+          window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+        });
+      }
+
+      // Mobile menu open/close with transitions
+      const setMenuIcon = (name) => {
+        menuBtn.innerHTML = '<span class="iconify h-5 w-5" data-icon="lucide:' + name + '" data-inline="false"></span>';
+      };
+
+      const openMenu = () => {
+        mobileNav.classList.remove('hidden');
+        requestAnimationFrame(() => {
+          mobileBackdrop.classList.remove('opacity-0');
+          mobileBackdrop.classList.add('opacity-100');
+          mobilePanel.classList.remove('opacity-0','translate-y-2');
+          mobilePanel.classList.add('opacity-100','translate-y-0');
+        });
+        setMenuIcon('x');
+        menuBtn.setAttribute('aria-expanded', 'true');
+        document.body.classList.add('overflow-hidden');
+      };
+
+      const closeMenu = () => {
+        mobileBackdrop.classList.add('opacity-0');
+        mobileBackdrop.classList.remove('opacity-100');
+        mobilePanel.classList.add('opacity-0','translate-y-2');
+        mobilePanel.classList.remove('opacity-100','translate-y-0');
+        setTimeout(() => {
+          mobileNav.classList.add('hidden');
+        }, 250);
+        setMenuIcon('menu');
+        menuBtn.setAttribute('aria-expanded', 'false');
+        document.body.classList.remove('overflow-hidden');
+      };
+
+      menuBtn.addEventListener('click', () => {
+        const isHidden = mobileNav.classList.contains('hidden');
+        isHidden ? openMenu() : closeMenu();
+      });
+
+      mobileBackdrop.addEventListener('click', closeMenu);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !mobileNav.classList.contains('hidden')) closeMenu();
+      });
+
+      document.querySelectorAll('.mobile-link').forEach(el => {
+        el.addEventListener('click', () => closeMenu());
+      });
+
+      // Copy buttons (animated state)
+      function bindCopyButtons() {
+        document.querySelectorAll('button[data-copy]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const selector = btn.getAttribute('data-copy');
+            const el = document.querySelector(selector);
+            if (!el) return;
+
+            const text = (el.textContent || '').trim();
+
+            try {
+              await navigator.clipboard.writeText(text);
+              const original = btn.innerHTML;
+              btn.innerHTML = '<span class="iconify h-3.5 w-3.5" data-icon="lucide:check" data-inline="false"></span>Copied';
+              btn.style.background = 'linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1))';
+
+              if (!reducedMotion) {
+                btn.animate(
+                  [{ transform: 'translateY(0)' }, { transform: 'translateY(-2px)' }, { transform: 'translateY(0)' }],
+                  { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' }
+                );
+              }
+
+              setTimeout(() => {
+                btn.innerHTML = original;
+                btn.style.background = 'linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1))';
+              }, 1300);
+            } catch (e) {}
+          });
+        });
+      }
+      bindCopyButtons();
+
+      // Reveal-on-scroll (accessible)
+      const revealEls = document.querySelectorAll('[data-reveal]');
+      revealEls.forEach((el, idx) => {
+        el.classList.add('opacity-0','translate-y-4','transition-all','duration-700');
+        el.style.transitionDelay = Math.min(idx * 70, 280) + "ms";
+      });
+
+      if (reducedMotion) {
+        revealEls.forEach((el) => {
+          el.classList.remove('opacity-0','translate-y-4');
+          el.style.transitionDelay = '0ms';
+        });
+      } else {
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.remove('opacity-0','translate-y-4');
+              io.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.12 });
+        revealEls.forEach(el => io.observe(el));
+      }
+
+      // Collapsible sections
+      const toggles = Array.from(document.querySelectorAll('.section-toggle'));
+      const setExpanded = (btn, expanded) => {
+        const targetSel = btn.getAttribute('data-target');
+        const panel = document.querySelector(targetSel);
+        const chevron = btn.querySelector('.chevron');
+        if (!panel) return;
+
+        btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+        if (expanded) {
+          panel.classList.remove('hidden');
+          if (chevron) chevron.classList.add('rotate-180');
+          if (!reducedMotion) {
+            panel.animate(
+              [{ opacity: 0, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'translateY(0)' }],
+              { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' }
+            );
+          }
+        } else {
+          if (!reducedMotion) {
+            const a = panel.animate(
+              [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-4px)' }],
+              { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' }
+            );
+            a.onfinish = () => panel.classList.add('hidden');
+          } else {
+            panel.classList.add('hidden');
+          }
+          if (chevron) chevron.classList.remove('rotate-180');
+        }
+      };
+
+      toggles.forEach(btn => {
+        const targetSel = btn.getAttribute('data-target');
+        const panel = document.querySelector(targetSel);
+        if (!panel) return;
+
+        // default open
+        panel.classList.remove('hidden');
+        btn.querySelector('.chevron')?.classList.add('rotate-180');
+
+        btn.addEventListener('click', () => {
+          const expanded = btn.getAttribute('aria-expanded') === 'true';
+          setExpanded(btn, !expanded);
+        });
+      });
+
+      const expandAll = document.getElementById('expand-all');
+      const collapseAll = document.getElementById('collapse-all');
+      if (expandAll) expandAll.addEventListener('click', () => toggles.forEach(t => setExpanded(t, true)));
+      if (collapseAll) collapseAll.addEventListener('click', () => toggles.forEach(t => setExpanded(t, false)));
+
+      // Loader fade-out on full load
+      window.addEventListener('load', () => {
+        if (!loader) return;
+        if (reducedMotion) {
+          loader.style.display = 'none';
+          return;
+        }
+        loader.classList.add('opacity-0');
+        setTimeout(() => { loader.remove(); }, 420);
+      });
+    });
+  </script>
+
+</body></html>
+  `;
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html",
+    },
+  });
+}
+
+function authenticate(request, USERNAME, PASSWORD) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader) return false;
+  return isValidCredentials(authHeader, USERNAME, PASSWORD);
 }
 
 async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
-  if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-    return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Commonthread"' } });
+  const cache = caches.default;
+  const cacheKey = new Request(request.url);
+  if (enableAuth) {
+    if (!authenticate(request, USERNAME, PASSWORD)) {
+      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+    }
   }
-  const html = atob("PCFET0NUWVBFIGh0bWw+Cgo8aHRtbCBjbGFzcz0iZGFyayIgbGFuZz0iZW4iPjxoZWFkPgo8bWV0YSBjaGFyc2V0PSJ1dGYtOCIvPgo8bWV0YSBjb250ZW50PSJ3aWR0aD1kZXZpY2Utd2lkdGgsIGluaXRpYWwtc2NhbGU9MS4wIiBuYW1lPSJ2aWV3cG9ydCIvPgo8dGl0bGU+Q29tbW9udGhyZWFkIC0gUHJlbWl1bSBNZWRpYSBIb3N0aW5nPC90aXRsZT4KPCEtLSBNYXRlcmlhbCBTeW1ib2xzIC0tPgo8bGluayBocmVmPSJodHRwczovL2ZvbnRzLmdvb2dsZWFwaXMuY29tL2NzczI/ZmFtaWx5PU1hdGVyaWFsK1N5bWJvbHMrT3V0bGluZWQ6d2dodCxGSUxMQDEwMC4uNzAwLDAuLjEmZGlzcGxheT1zd2FwIiByZWw9InN0eWxlc2hlZXQiLz4KPGxpbmsgaHJlZj0iaHR0cHM6Ly9mb250cy5nb29nbGVhcGlzLmNvbS9jc3MyP2ZhbWlseT1NYXRlcmlhbCtTeW1ib2xzK091dGxpbmVkOndnaHQsRklMTEAxMDAuLjcwMCwwLi4xJmRpc3BsYXk9c3dhcCIgcmVsPSJzdHlsZXNoZWV0Ii8+CjxsaW5rIGhyZWY9Imh0dHBzOi8vZm9udHMuZ29vZ2xlYXBpcy5jb20vY3NzMj9mYW1pbHk9R2Vpc3Q6d2dodEAxMDAuLjkwMCZmYW1pbHk9U3luZTp3Z2h0QDEwMC4uOTAwJmRpc3BsYXk9c3dhcCIgcmVsPSJzdHlsZXNoZWV0Ii8+CjxzdHlsZT4KICAgICAgICAubWF0ZXJpYWwtc3ltYm9scy1vdXRsaW5lZCB7CiAgICAgICAgICAgIGZvbnQtZmFtaWx5OiAnTWF0ZXJpYWwgU3ltYm9scyBPdXRsaW5lZCc7CiAgICAgICAgICAgIGZvbnQtd2VpZ2h0OiBub3JtYWw7CiAgICAgICAgICAgIGZvbnQtc3R5bGU6IG5vcm1hbDsKICAgICAgICAgICAgZm9udC1zaXplOiAyNHB4OwogICAgICAgICAgICBsaW5lLWhlaWdodDogMTsKICAgICAgICAgICAgbGV0dGVyLXNwYWNpbmc6IG5vcm1hbDsKICAgICAgICAgICAgdGV4dC10cmFuc2Zvcm06IG5vbmU7CiAgICAgICAgICAgIGRpc3BsYXk6IGlubGluZS1ibG9jazsKICAgICAgICAgICAgd2hpdGUtc3BhY2U6IG5vd3JhcDsKICAgICAgICAgICAgd29yZC13cmFwOiBub3JtYWw7CiAgICAgICAgICAgIGRpcmVjdGlvbjogbHRyOwogICAgICAgICAgICAtd2Via2l0LWZvbnQtZmVhdHVyZS1zZXR0aW5nczogJ2xpZ2EnOwogICAgICAgICAgICAtd2Via2l0LWZvbnQtc21vb3RoaW5nOiBhbnRpYWxpYXNlZDsKICAgICAgICB9CiAgICA8L3N0eWxlPgo8IS0tIFRhaWx3aW5kIENTUyB3aXRoIGNvbmZpZ3VyYXRpb24gLS0+CjxzY3JpcHQgc3JjPSJodHRwczovL2Nkbi50YWlsd2luZGNzcy5jb20/cGx1Z2lucz1mb3Jtcyxjb250YWluZXItcXVlcmllcyI+PC9zY3JpcHQ+CjxzY3JpcHQgaWQ9InRhaWx3aW5kLWNvbmZpZyI+CiAgICAgICAgdGFpbHdpbmQuY29uZmlnID0gewogICAgICAgICAgZGFya01vZGU6ICJjbGFzcyIsCiAgICAgICAgICB0aGVtZTogewogICAgICAgICAgICBleHRlbmQ6IHsKICAgICAgICAgICAgICAiY29sb3JzIjogewogICAgICAgICAgICAgICAgICAgICAgInByaW1hcnktZml4ZWQiOiAiI2UxZTBmZiIsCiAgICAgICAgICAgICAgICAgICAgICAiYm9yZGVyLXN1YnRsZSI6ICJyZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMSkiLAogICAgICAgICAgICAgICAgICAgICAgInN1cmZhY2UtY29udGFpbmVyLWxvdyI6ICIjMWMxYjFkIiwKICAgICAgICAgICAgICAgICAgICAgICJzdXJmYWNlLXZhcmlhbnQiOiAiIzM1MzQzNyIsCiAgICAgICAgICAgICAgICAgICAgICAib24tZXJyb3IiOiAiIzY5MDAwNSIsCiAgICAgICAgICAgICAgICAgICAgICAidGVydGlhcnkiOiAiI2ZmYjc4MyIsCiAgICAgICAgICAgICAgICAgICAgICAib24tcHJpbWFyeS1maXhlZC12YXJpYW50IjogIiMyZjJlYmUiLAogICAgICAgICAgICAgICAgICAgICAgImJhY2tncm91bmQiOiAiIzEzMTMxNSIsCiAgICAgICAgICAgICAgICAgICAgICAib24tcHJpbWFyeS1jb250YWluZXIiOiAiIzBkMDA5NiIsCiAgICAgICAgICAgICAgICAgICAgICAiaW5kaWdvLWdsb3ciOiAicmdiYSg5OSwgMTAyLCAyNDEsIDAuMTUpIiwKICAgICAgICAgICAgICAgICAgICAgICJ2aW9sZXQtZ2xvdyI6ICJyZ2JhKDEzOSwgOTIsIDI0NiwgMC4xNSkiLAogICAgICAgICAgICAgICAgICAgICAgIm9uLXN1cmZhY2UiOiAiI2U1ZTFlNCIsCiAgICAgICAgICAgICAgICAgICAgICAidGV4dC1tdXRlZCI6ICIjYTFhMWFhIiwKICAgICAgICAgICAgICAgICAgICAgICJzZWNvbmRhcnkiOiAiI2QwYmNmZiIsCiAgICAgICAgICAgICAgICAgICAgICAiZXJyb3ItY29udGFpbmVyIjogIiM5MzAwMGEiLAogICAgICAgICAgICAgICAgICAgICAgInN1cmZhY2UtY29udGFpbmVyLWhpZ2giOiAiIzJhMmEyYyIsCiAgICAgICAgICAgICAgICAgICAgICAic2Vjb25kYXJ5LWNvbnRhaW5lciI6ICIjNTcxYmMxIiwKICAgICAgICAgICAgICAgICAgICAgICJ0ZXJ0aWFyeS1maXhlZC1kaW0iOiAiI2ZmYjc4MyIsCiAgICAgICAgICAgICAgICAgICAgICAib24tc2Vjb25kYXJ5LWZpeGVkLXZhcmlhbnQiOiAiIzU1MTZiZSIsCiAgICAgICAgICAgICAgICAgICAgICAib24tZXJyb3ItY29udGFpbmVyIjogIiNmZmRhZDYiLAogICAgICAgICAgICAgICAgICAgICAgInRlcnRpYXJ5LWZpeGVkIjogIiNmZmRjYzUiLAogICAgICAgICAgICAgICAgICAgICAgIm9uLXRlcnRpYXJ5LWNvbnRhaW5lciI6ICIjNDUyMDAwIiwKICAgICAgICAgICAgICAgICAgICAgICJzdXJmYWNlLXRpbnQiOiAiI2MwYzFmZiIsCiAgICAgICAgICAgICAgICAgICAgICAib24tcHJpbWFyeSI6ICIjMTAwMGE5IiwKICAgICAgICAgICAgICAgICAgICAgICJvbi10ZXJ0aWFyeS1maXhlZC12YXJpYW50IjogIiM3MDM3MDAiLAogICAgICAgICAgICAgICAgICAgICAgIm9uLXNlY29uZGFyeS1maXhlZCI6ICIjMjMwMDVjIiwKICAgICAgICAgICAgICAgICAgICAgICJpbnZlcnNlLW9uLXN1cmZhY2UiOiAiIzMxMzAzMiIsCiAgICAgICAgICAgICAgICAgICAgICAic3VyZmFjZS1kaW0iOiAiIzEzMTMxNSIsCiAgICAgICAgICAgICAgICAgICAgICAib24tdGVydGlhcnkiOiAiIzRmMjUwMCIsCiAgICAgICAgICAgICAgICAgICAgICAicHJpbWFyeSI6ICIjYzBjMWZmIiwKICAgICAgICAgICAgICAgICAgICAgICJzdXJmYWNlLWNvbnRhaW5lciI6ICIjMjAxZjIyIiwKICAgICAgICAgICAgICAgICAgICAgICJ0ZXJ0aWFyeS1jb250YWluZXIiOiAiI2Q5NzcyMSIsCiAgICAgICAgICAgICAgICAgICAgICAic3VyZmFjZS1lbGV2YXRlZCI6ICIjMTgxODFiIiwKICAgICAgICAgICAgICAgICAgICAgICJvdXRsaW5lIjogIiM5MDhmYTAiLAogICAgICAgICAgICAgICAgICAgICAgIm9uLXRlcnRpYXJ5LWZpeGVkIjogIiMzMDE0MDAiLAogICAgICAgICAgICAgICAgICAgICAgIm91dGxpbmUtdmFyaWFudCI6ICIjNDY0NTU0IiwKICAgICAgICAgICAgICAgICAgICAgICJzdXJmYWNlLWNvbnRhaW5lci1sb3dlc3QiOiAiIzBlMGUxMCIsCiAgICAgICAgICAgICAgICAgICAgICAiaW52ZXJzZS1wcmltYXJ5IjogIiM0OTRiZDYiLAogICAgICAgICAgICAgICAgICAgICAgIm9uLXNlY29uZGFyeS1jb250YWluZXIiOiAiI2M0YWJmZiIsCiAgICAgICAgICAgICAgICAgICAgICAib24tc2Vjb25kYXJ5IjogIiMzYzAwOTEiLAogICAgICAgICAgICAgICAgICAgICAgImludmVyc2Utc3VyZmFjZSI6ICIjZTVlMWU0IiwKICAgICAgICAgICAgICAgICAgICAgICJzZWNvbmRhcnktZml4ZWQiOiAiI2U5ZGRmZiIsCiAgICAgICAgICAgICAgICAgICAgICAicHJpbWFyeS1jb250YWluZXIiOiAiIzgwODNmZiIsCiAgICAgICAgICAgICAgICAgICAgICAic3VyZmFjZSI6ICIjMTMxMzE1IiwKICAgICAgICAgICAgICAgICAgICAgICJvbi1wcmltYXJ5LWZpeGVkIjogIiMwNzAwNmMiLAogICAgICAgICAgICAgICAgICAgICAgIm9uLWJhY2tncm91bmQiOiAiI2U1ZTFlNCIsCiAgICAgICAgICAgICAgICAgICAgICAiZXJyb3IiOiAiI2ZmYjRhYiIsCiAgICAgICAgICAgICAgICAgICAgICAic2Vjb25kYXJ5LWZpeGVkLWRpbSI6ICIjZDBiY2ZmIiwKICAgICAgICAgICAgICAgICAgICAgICJzdXJmYWNlLWNvbnRhaW5lci1oaWdoZXN0IjogIiMzNTM0MzciLAogICAgICAgICAgICAgICAgICAgICAgInN1cmZhY2UtYnJpZ2h0IjogIiMzOTM5M2IiLAogICAgICAgICAgICAgICAgICAgICAgIm9uLXN1cmZhY2UtdmFyaWFudCI6ICIjYzdjNGQ3IiwKICAgICAgICAgICAgICAgICAgICAgICJwcmltYXJ5LWZpeGVkLWRpbSI6ICIjYzBjMWZmIgogICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgImJvcmRlclJhZGl1cyI6IHsKICAgICAgICAgICAgICAgICAgICAgICJERUZBVUxUIjogIjAuMjVyZW0iLAogICAgICAgICAgICAgICAgICAgICAgImxnIjogIjAuNXJlbSIsCiAgICAgICAgICAgICAgICAgICAgICAieGwiOiAiMC43NXJlbSIsCiAgICAgICAgICAgICAgICAgICAgICAiZnVsbCI6ICI5OTk5cHgiCiAgICAgICAgICAgICAgfSwKICAgICAgICAgICAgICAic3BhY2luZyI6IHsKICAgICAgICAgICAgICAgICAgICAgICJtYXJnaW4tZGVza3RvcCI6ICI0OHB4IiwKICAgICAgICAgICAgICAgICAgICAgICJndXR0ZXIiOiAiMjRweCIsCiAgICAgICAgICAgICAgICAgICAgICAibWF4LXdpZHRoIjogIjEyODBweCIsCiAgICAgICAgICAgICAgICAgICAgICAidW5pdCI6ICI0cHgiLAogICAgICAgICAgICAgICAgICAgICAgIm1hcmdpbi1tb2JpbGUiOiAiMTZweCIKICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICJmb250RmFtaWx5IjogewogICAgICAgICAgICAgICAgICAgICAgImhlYWRsaW5lLWxnLW1vYmlsZSI6IFsiU3luZSJdLAogICAgICAgICAgICAgICAgICAgICAgImJvZHktbWQiOiBbIkdlaXN0Il0sCiAgICAgICAgICAgICAgICAgICAgICAiaGVhZGxpbmUtbGciOiBbIlN5bmUiXSwKICAgICAgICAgICAgICAgICAgICAgICJjb2RlIjogWyJHZWlzdCJdLAogICAgICAgICAgICAgICAgICAgICAgImRpc3BsYXkteGwiOiBbIlN5bmUiXSwKICAgICAgICAgICAgICAgICAgICAgICJib2R5LWxnIjogWyJHZWlzdCJdLAogICAgICAgICAgICAgICAgICAgICAgInRpdGxlLW1kIjogWyJTeW5lIl0sCiAgICAgICAgICAgICAgICAgICAgICAibGFiZWwtc20iOiBbIkdlaXN0Il0KICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICJmb250U2l6ZSI6IHsKICAgICAgICAgICAgICAgICAgICAgICJoZWFkbGluZS1sZy1tb2JpbGUiOiBbIjMycHgiLCB7ImxpbmVIZWlnaHQiOiAiMzhweCIsICJmb250V2VpZ2h0IjogIjcwMCJ9XSwKICAgICAgICAgICAgICAgICAgICAgICJib2R5LW1kIjogWyIxNnB4IiwgeyJsaW5lSGVpZ2h0IjogIjI0cHgiLCAiZm9udFdlaWdodCI6ICI0MDAifV0sCiAgICAgICAgICAgICAgICAgICAgICAiaGVhZGxpbmUtbGciOiBbIjQwcHgiLCB7ImxpbmVIZWlnaHQiOiAiNDhweCIsICJsZXR0ZXJTcGFjaW5nIjogIi0wLjAxZW0iLCAiZm9udFdlaWdodCI6ICI3MDAifV0sCiAgICAgICAgICAgICAgICAgICAgICAiY29kZSI6IFsiMTRweCIsIHsibGluZUhlaWdodCI6ICIyMHB4IiwgImZvbnRXZWlnaHQiOiAiNDAwIn1dLAogICAgICAgICAgICAgICAgICAgICAgImRpc3BsYXkteGwiOiBbIjY0cHgiLCB7ImxpbmVIZWlnaHQiOiAiNzJweCIsICJsZXR0ZXJTcGFjaW5nIjogIi0wLjAyZW0iLCAiZm9udFdlaWdodCI6ICI4MDAifV0sCiAgICAgICAgICAgICAgICAgICAgICAiYm9keS1sZyI6IFsiMThweCIsIHsibGluZUhlaWdodCI6ICIyOHB4IiwgImZvbnRXZWlnaHQiOiAiNDAwIn1dLAogICAgICAgICAgICAgICAgICAgICAgInRpdGxlLW1kIjogWyIyNHB4IiwgeyJsaW5lSGVpZ2h0IjogIjMycHgiLCAiZm9udFdlaWdodCI6ICI2MDAifV0sCiAgICAgICAgICAgICAgICAgICAgICAibGFiZWwtc20iOiBbIjE0cHgiLCB7ImxpbmVIZWlnaHQiOiAiMjBweCIsICJsZXR0ZXJTcGFjaW5nIjogIjAuMDJlbSIsICJmb250V2VpZ2h0IjogIjUwMCJ9XQogICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQogICAgICAgICAgfQogICAgICAgIH0KICAgIDwvc2NyaXB0Pgo8bGluayByZWw9Imljb24iIGhyZWY9Imh0dHBzOi8vbWVkaWEuZGh5ZXkuY2MvMTc4NzQ1MDIwNDA3Ni5wbmciIHR5cGU9ImltYWdlL3BuZyIvPjwvaGVhZD4KPGJvZHkgY2xhc3M9ImJnLXN1cmZhY2UtY29udGFpbmVyLWxvd2VzdCB0ZXh0LW9uLWJhY2tncm91bmQgZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCBtaW4taC1zY3JlZW4gcmVsYXRpdmUgc2VsZWN0aW9uOmJnLXByaW1hcnktY29udGFpbmVyIHNlbGVjdGlvbjp0ZXh0LW9uLXByaW1hcnktY29udGFpbmVyIj4KPCEtLSBBbWJpZW50IGdsb3dpbmcgYmFja2dyb3VuZCBlZmZlY3QgLS0+CjxkaXYgY2xhc3M9ImZpeGVkIHRvcC1bLTIwJV0gbGVmdC1bLTEwJV0gdy1bNTAlXSBoLVs1MCVdIGJnLXByaW1hcnktY29udGFpbmVyLzIwIGJsdXItWzE1MHB4XSByb3VuZGVkLWZ1bGwgcG9pbnRlci1ldmVudHMtbm9uZSB6LTAiPjwvZGl2Pgo8ZGl2IGNsYXNzPSJmaXhlZCBib3R0b20tWy0yMCVdIHJpZ2h0LVstMTAlXSB3LVs0MCVdIGgtWzQwJV0gYmctc2Vjb25kYXJ5LWNvbnRhaW5lci8yMCBibHVyLVsxNTBweF0gcm91bmRlZC1mdWxsIHBvaW50ZXItZXZlbnRzLW5vbmUgei0wIj48L2Rpdj4KPCEtLSBUb3BOYXZCYXIgLS0+CjxuYXYgY2xhc3M9ImJnLWJhY2tncm91bmQvNzAgYmFja2Ryb3AtYmx1ci14bCB0ZXh0LXByaW1hcnkgZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCBmaXhlZCB0b3AtMCB3LWZ1bGwgYm9yZGVyLWIgYm9yZGVyLWJvcmRlci1zdWJ0bGUgc2hhZG93LVswXzBfNDBweF9yZ2JhKDk5LDEwMiwyNDEsMC4xKV0gei01MCI+CjxkaXYgY2xhc3M9ImZsZXgganVzdGlmeS1iZXR3ZWVuIGl0ZW1zLWNlbnRlciBoLTE2IHB4LW1hcmdpbi1kZXNrdG9wIG1heC13LW1heC13aWR0aCBteC1hdXRvIj4KPCEtLSBCcmFuZCAtLT4KPGEgaHJlZj0iLyIgY2xhc3M9ImZsZXggaXRlbXMtY2VudGVyIGdhcC0zIj4KICA8aW1nIHNyYz0iaHR0cHM6Ly9tZWRpYS5kaHlleS5jYy8xNzg3NDUwMjA0MDc2LnBuZyIgYWx0PSJDb21tb250aHJlYWQiIGNsYXNzPSJoLTkgdy05IHJvdW5kZWQtbGcgb2JqZWN0LWNvdmVyIiAvPgogIDxzcGFuIGNsYXNzPSJmb250LWRpc3BsYXkteGwgdGV4dC10aXRsZS1tZCBiZy1ncmFkaWVudC10by1yIGZyb20tcHJpbWFyeSB0by1zZWNvbmRhcnkgYmctY2xpcC10ZXh0IHRleHQtdHJhbnNwYXJlbnQiPkNvbW1vbnRocmVhZDwvc3Bhbj4KPC9hPgo8IS0tIE5hdmlnYXRpb24gLS0+CjxkaXYgY2xhc3M9ImhpZGRlbiBtZDpmbGV4IGdhcC02IGl0ZW1zLWNlbnRlciI+CjxhIGNsYXNzPSJ0ZXh0LW9uLXN1cmZhY2UtdmFyaWFudCBob3Zlcjp0ZXh0LXByaW1hcnkgdHJhbnNpdGlvbi1jb2xvcnMgZHVyYXRpb24tMjAwIiBocmVmPSIvZG9jcyI+QVBJIERvY3M8L2E+CjwvZGl2Pgo8IS0tIEFjdGlvbnMgLS0+CjxkaXYgY2xhc3M9ImZsZXggaXRlbXMtY2VudGVyIGdhcC00Ij4KCjxidXR0b24gY2xhc3M9ImhpZGRlbiBtZDpmbGV4IGJnLWdyYWRpZW50LXRvLXIgZnJvbS1wcmltYXJ5LWNvbnRhaW5lciB0by1zZWNvbmRhcnktY29udGFpbmVyIHRleHQtd2hpdGUgcHgtNCBweS0yIHJvdW5kZWQtZnVsbCBmb250LWxhYmVsLXNtIHRleHQtbGFiZWwtc20gaG92ZXI6b3BhY2l0eS05MCBhY3RpdmU6c2NhbGUtOTUgdHJhbnNpdGlvbi1hbGwgc2hhZG93LVswXzBfMjBweF9yZ2JhKDk5LDEwMiwyNDEsMC4yKV0gaG92ZXI6c2hhZG93LVswXzBfNDBweF9yZ2JhKDk5LDEwMiwyNDEsMC40KV0gYm9yZGVyIGJvcmRlci1ib3JkZXItc3VidGxlIiBvbmNsaWNrPSJ3aW5kb3cub3BlbignaHR0cHM6Ly90Lm1lL0ltYWdlaG9zdHNzYm90JywgJ19ibGFuaycpIj5VcGxvYWQgdmlhIEJvdDwvYnV0dG9uPgo8L2Rpdj4KPC9kaXY+CjwvbmF2Pgo8IS0tIE1haW4gQ29udGVudCBDYW52YXMgLS0+CjxtYWluIGNsYXNzPSJwdC1bMTYwcHhdIHBiLTMyIHB4LW1hcmdpbi1tb2JpbGUgbWQ6cHgtbWFyZ2luLWRlc2t0b3AgbWF4LXctbWF4LXdpZHRoIG14LWF1dG8gcmVsYXRpdmUgei0xMCBmbGV4IGZsZXgtY29sIGl0ZW1zLWNlbnRlciI+CjwhLS0gSGVybyBTZWN0aW9uIC0tPgo8c2VjdGlvbiBjbGFzcz0idGV4dC1jZW50ZXIgdy1mdWxsIG1heC13LTR4bCBteC1hdXRvIGZsZXggZmxleC1jb2wgaXRlbXMtY2VudGVyIHNwYWNlLXktOCBtYi0yNCI+CjwhLS0gUGlsbCBCYWRnZSAtLT4KPGRpdiBjbGFzcz0iaW5saW5lLWZsZXggaXRlbXMtY2VudGVyIGp1c3RpZnktY2VudGVyIHB4LTQgcHktMS41IHJvdW5kZWQtZnVsbCBib3JkZXIgYm9yZGVyLWJvcmRlci1zdWJ0bGUgYmctaW5kaWdvLWdsb3cvMzAgYmFja2Ryb3AtYmx1ci1tZCI+CjxzcGFuIGNsYXNzPSJmb250LWxhYmVsLXNtIHRleHQtbGFiZWwtc20gdGV4dC1wcmltYXJ5Ij5tZWRpYS5kaHlleS5jYzwvc3Bhbj4KPC9kaXY+CjwhLS0gSGVhZGxpbmVzIC0tPgo8aDEgY2xhc3M9ImZvbnQtZGlzcGxheS14bCB0ZXh0LWRpc3BsYXkteGwgdGV4dC1vbi1zdXJmYWNlIGJnLWdyYWRpZW50LXRvLWIgZnJvbS13aGl0ZSB0by1vbi1zdXJmYWNlLXZhcmlhbnQgYmctY2xpcC10ZXh0IHRleHQtdHJhbnNwYXJlbnQiPgogICAgICAgICAgICAgICAgSG9zdCBtZWRpYS48YnIvPlNoYXJlIGluc3RhbnRseS4KICAgICAgICAgICAgPC9oMT4KPCEtLSBTdWJ0aXRsZSAtLT4KPHAgY2xhc3M9ImZvbnQtYm9keS1sZyB0ZXh0LWJvZHktbGcgdGV4dC10ZXh0LW11dGVkIG1heC13LTJ4bCBteC1hdXRvIj4KICAgICAgICAgICAgICAgIFVwbG9hZCBpbWFnZXMsIHZpZGVvcyAmIGZpbGVzIHRvIG91ciBnbG9iYWwgQ0ROLiBGcmVlLCBmYXN0LCBhbmQgcG93ZXJlZCBieSBUZWxlZ3JhbS4KICAgICAgICAgICAgPC9wPgo8IS0tIENUQXMgLS0+CjxkaXYgY2xhc3M9ImZsZXggZmxleC1jb2wgc206ZmxleC1yb3cgZ2FwLTQgbXQtOCI+CjxidXR0b24gY2xhc3M9ImJnLWdyYWRpZW50LXRvLXIgZnJvbS1wcmltYXJ5LWNvbnRhaW5lciB0by1zZWNvbmRhcnktY29udGFpbmVyIHRleHQtd2hpdGUgcHgtOCBweS00IHJvdW5kZWQtZnVsbCBmb250LXRpdGxlLW1kIHRleHQtdGl0bGUtbWQgIXRleHQtWzE2cHhdIGhvdmVyOnNoYWRvdy1bMF8wXzQwcHhfcmdiYSg5OSwxMDIsMjQxLDAuMyldIHRyYW5zaXRpb24tYWxsIGR1cmF0aW9uLTMwMCBhY3RpdmU6c2NhbGUtOTUiPgogICAgICAgICAgICAgICAgICAgIFVwbG9hZCBOb3cKICAgICAgICAgICAgICAgIDwvYnV0dG9uPgo8YnV0dG9uIGNsYXNzPSJweC04IHB5LTQgcm91bmRlZC1mdWxsIGJvcmRlciBib3JkZXItYm9yZGVyLXN1YnRsZSBiZy10cmFuc3BhcmVudCB0ZXh0LW9uLXN1cmZhY2UgZm9udC10aXRsZS1tZCB0ZXh0LXRpdGxlLW1kICF0ZXh0LVsxNnB4XSBob3ZlcjpiZy1zdXJmYWNlLWVsZXZhdGVkIHRyYW5zaXRpb24tY29sb3JzIGR1cmF0aW9uLTMwMCBhY3RpdmU6c2NhbGUtOTUiIG9uY2xpY2s9ImxvY2F0aW9uLmhyZWY9Jy9kb2NzJyI+VmlldyBBUEkgRG9jczwvYnV0dG9uPgo8L2Rpdj4KPC9zZWN0aW9uPgo8IS0tIFVwbG9hZCBab25lIC0tPgo8c2VjdGlvbiBjbGFzcz0idy1mdWxsIG1heC13LTR4bCBteC1hdXRvIG1iLTMyIj4KPGRpdiBjbGFzcz0idy1mdWxsIGJhY2tkcm9wLWJsdXIteGwgYmctc3VyZmFjZS1lbGV2YXRlZC83MCBib3JkZXIgYm9yZGVyLWJvcmRlci1zdWJ0bGUgcm91bmRlZC14bCBwLTEgc2hhZG93LWxnIHJlbGF0aXZlIG92ZXJmbG93LWhpZGRlbiBncm91cCBob3ZlcjpzaGFkb3ctWzBfMF80MHB4X3JnYmEoOTksMTAyLDI0MSwwLjEpXSB0cmFuc2l0aW9uLWFsbCBkdXJhdGlvbi01MDAiPgo8IS0tIFN1YnRsZSBUb3AgSGlnaGxpZ2h0IC0tPgo8ZGl2IGNsYXNzPSJhYnNvbHV0ZSB0b3AtMCBpbnNldC14LTAgaC1bMXB4XSBiZy1ncmFkaWVudC10by1yIGZyb20tdHJhbnNwYXJlbnQgdmlhLXByaW1hcnkvMzAgdG8tdHJhbnNwYXJlbnQiPjwvZGl2Pgo8ZGl2IGNsYXNzPSJ3LWZ1bGwgaC04MCByb3VuZGVkLWxnIGJvcmRlci0yIGJvcmRlci1kYXNoZWQgYm9yZGVyLW91dGxpbmUtdmFyaWFudCBncm91cC1ob3Zlcjpib3JkZXItcHJpbWFyeS81MCB0cmFuc2l0aW9uLWNvbG9ycyBkdXJhdGlvbi0zMDAgZmxleCBmbGV4LWNvbCBpdGVtcy1jZW50ZXIganVzdGlmeS1jZW50ZXIgcmVsYXRpdmUgb3ZlcmZsb3ctaGlkZGVuIGN1cnNvci1wb2ludGVyIGJnLVsjMTgxODFiXS81MCI+CjwhLS0gR2xvdyBpbiBjZW50ZXIgLS0+CjxkaXYgY2xhc3M9ImFic29sdXRlIGluc2V0LTAgYmctaW5kaWdvLWdsb3cvNSBvcGFjaXR5LTAgZ3JvdXAtaG92ZXI6b3BhY2l0eS0xMDAgdHJhbnNpdGlvbi1vcGFjaXR5IGR1cmF0aW9uLTUwMCByb3VuZGVkLWxnIHJhZGlhbC1ncmFkaWVudC1jZW50ZXIiPjwvZGl2Pgo8ZGl2IGNsYXNzPSJ6LTEwIGZsZXggZmxleC1jb2wgaXRlbXMtY2VudGVyIHNwYWNlLXktNCB0ZXh0LWNlbnRlciBweC00Ij4KPHNwYW4gY2xhc3M9Im1hdGVyaWFsLXN5bWJvbHMtb3V0bGluZWQgdGV4dC00eGwgdGV4dC1wcmltYXJ5IiBkYXRhLWljb249ImNsb3VkX3VwbG9hZCI+Y2xvdWRfdXBsb2FkPC9zcGFuPgo8aDMgY2xhc3M9ImZvbnQtdGl0bGUtbWQgdGV4dC10aXRsZS1tZCB0ZXh0LW9uLXN1cmZhY2UgIXRleHQtWzIwcHhdIj5EcmFnICYgZHJvcCBmaWxlcyBoZXJlLCBvciBjbGljayB0byBicm93c2U8L2gzPgo8cCBjbGFzcz0iZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LXRleHQtbXV0ZWQiPlN1cHBvcnRzIGltYWdlcywgdmlkZW9zLCBkb2N1bWVudHMgdXAgdG8gNTAgTUI8L3A+CjwvZGl2Pgo8L2Rpdj4KPC9kaXY+Cjwvc2VjdGlvbj4KPCEtLSBGZWF0dXJlIFBpbGxzIFJvdyAoQmVudG8vQ2FyZCBHcmlkKSAtLT4KPHNlY3Rpb24gY2xhc3M9InctZnVsbCBncmlkIGdyaWQtY29scy0xIG1kOmdyaWQtY29scy0zIGdhcC02IG1heC13LTV4bCBteC1hdXRvIj4KPCEtLSBGZWF0dXJlIDEgLS0+CjxkaXYgY2xhc3M9InAtNiByb3VuZGVkLXhsIGJnLXN1cmZhY2UtZWxldmF0ZWQgYm9yZGVyIGJvcmRlci1ib3JkZXItc3VidGxlIGJhY2tkcm9wLWJsdXItbGcgaG92ZXI6YmctWyMxODE4MWJdIGhvdmVyOi10cmFuc2xhdGUteS0xIHRyYW5zaXRpb24tYWxsIGR1cmF0aW9uLTMwMCBncm91cCByZWxhdGl2ZSI+CjwhLS0gTGVmdCBBY2NlbnQgTGluZSAtLT4KPGRpdiBjbGFzcz0iYWJzb2x1dGUgbGVmdC0wIHRvcC0xLzIgLXRyYW5zbGF0ZS15LTEvMiB3LVsycHhdIGgtMCBiZy1wcmltYXJ5IGdyb3VwLWhvdmVyOmgtMS8yIHRyYW5zaXRpb24tYWxsIGR1cmF0aW9uLTMwMCByb3VuZGVkLXItZnVsbCI+PC9kaXY+CjxzcGFuIGNsYXNzPSJtYXRlcmlhbC1zeW1ib2xzLW91dGxpbmVkIHRleHQtcHJpbWFyeSBtYi00IiBkYXRhLWljb249ImJvbHQiPmJvbHQ8L3NwYW4+CjxoNCBjbGFzcz0iZm9udC10aXRsZS1tZCB0ZXh0LXRpdGxlLW1kICF0ZXh0LVsxOHB4XSB0ZXh0LW9uLXN1cmZhY2UgbWItMiI+4pqhIEVkZ2UgQ2FjaGVkPC9oND4KPHAgY2xhc3M9ImZvbnQtYm9keS1tZCB0ZXh0LWJvZHktbWQgdGV4dC10ZXh0LW11dGVkIj5EZWxpdmVyZWQgaW5zdGFudGx5IHdvcmxkd2lkZSB2aWEgb3VyIGhpZ2hseSBvcHRpbWl6ZWQgZ2xvYmFsIENETi48L3A+CjwvZGl2Pgo8IS0tIEZlYXR1cmUgMiAtLT4KPGRpdiBjbGFzcz0icC02IHJvdW5kZWQteGwgYmctc3VyZmFjZS1lbGV2YXRlZCBib3JkZXIgYm9yZGVyLWJvcmRlci1zdWJ0bGUgYmFja2Ryb3AtYmx1ci1sZyBob3ZlcjpiZy1bIzE4MTgxYl0gaG92ZXI6LXRyYW5zbGF0ZS15LTEgdHJhbnNpdGlvbi1hbGwgZHVyYXRpb24tMzAwIGdyb3VwIHJlbGF0aXZlIj4KPGRpdiBjbGFzcz0iYWJzb2x1dGUgbGVmdC0wIHRvcC0xLzIgLXRyYW5zbGF0ZS15LTEvMiB3LVsycHhdIGgtMCBiZy1wcmltYXJ5IGdyb3VwLWhvdmVyOmgtMS8yIHRyYW5zaXRpb24tYWxsIGR1cmF0aW9uLTMwMCByb3VuZGVkLXItZnVsbCI+PC9kaXY+CjxzcGFuIGNsYXNzPSJtYXRlcmlhbC1zeW1ib2xzLW91dGxpbmVkIHRleHQtc2Vjb25kYXJ5IG1iLTQiIGRhdGEtaWNvbj0ic21hcnRfdG95Ij5zbWFydF90b3k8L3NwYW4+CjxoNCBjbGFzcz0iZm9udC10aXRsZS1tZCB0ZXh0LXRpdGxlLW1kICF0ZXh0LVsxOHB4XSB0ZXh0LW9uLXN1cmZhY2UgbWItMiI+8J+kliBUZWxlZ3JhbSBCb3Q8L2g0Pgo8cCBjbGFzcz0iZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LXRleHQtbXV0ZWQiPlVwbG9hZCBzZWFtbGVzc2x5IGRpcmVjdGx5IGZyb20geW91ciBmYXZvcml0ZSBtZXNzZW5nZXIgYXBwLjwvcD4KPC9kaXY+CjwhLS0gRmVhdHVyZSAzIC0tPgo8ZGl2IGNsYXNzPSJwLTYgcm91bmRlZC14bCBiZy1zdXJmYWNlLWVsZXZhdGVkIGJvcmRlciBib3JkZXItYm9yZGVyLXN1YnRsZSBiYWNrZHJvcC1ibHVyLWxnIGhvdmVyOmJnLVsjMTgxODFiXSBob3ZlcjotdHJhbnNsYXRlLXktMSB0cmFuc2l0aW9uLWFsbCBkdXJhdGlvbi0zMDAgZ3JvdXAgcmVsYXRpdmUiPgo8ZGl2IGNsYXNzPSJhYnNvbHV0ZSBsZWZ0LTAgdG9wLTEvMiAtdHJhbnNsYXRlLXktMS8yIHctWzJweF0gaC0wIGJnLXByaW1hcnkgZ3JvdXAtaG92ZXI6aC0xLzIgdHJhbnNpdGlvbi1hbGwgZHVyYXRpb24tMzAwIHJvdW5kZWQtci1mdWxsIj48L2Rpdj4KPHNwYW4gY2xhc3M9Im1hdGVyaWFsLXN5bWJvbHMtb3V0bGluZWQgdGV4dC1wcmltYXJ5LWNvbnRhaW5lciBtYi00IiBkYXRhLWljb249ImxvY2siPmxvY2s8L3NwYW4+CjxoNCBjbGFzcz0iZm9udC10aXRsZS1tZCB0ZXh0LXRpdGxlLW1kICF0ZXh0LVsxOHB4XSB0ZXh0LW9uLXN1cmZhY2UgbWItMiI+8J+UkiBTZWN1cmU8L2g0Pgo8cCBjbGFzcz0iZm9udC1ib2R5LW1kIHRleHQtYm9keS1tZCB0ZXh0LXRleHQtbXV0ZWQiPllvdXIgZmlsZXMgYXJlIGVuY3J5cHRlZCBhbmQgc2VjdXJlbHkgc3RvcmVkIHdpdGggc3RyaWN0IGFjY2VzcyBjb250cm9scy48L3A+CjwvZGl2Pgo8L3NlY3Rpb24+CjwvbWFpbj4KPCEtLSBGb290ZXIgLS0+Cgo8c2NyaXB0PihmdW5jdGlvbigpe3ZhciBmaT1kb2N1bWVudC5jcmVhdGVFbGVtZW50KCJpbnB1dCIpO2ZpLnR5cGU9ImZpbGUiO2ZpLm11bHRpcGxlPXRydWU7ZmkuYWNjZXB0PSIqLyoiO2ZpLnN0eWxlLmRpc3BsYXk9Im5vbmUiO2RvY3VtZW50LmJvZHkuYXBwZW5kQ2hpbGQoZmkpO2FzeW5jIGZ1bmN0aW9uIHVwKGYpe3ZhciBmZD1uZXcgRm9ybURhdGEoKTtmZC5hcHBlbmQoImZpbGUiLGYpO3ZhciByPWF3YWl0IGZldGNoKCIvdXBsb2FkIix7bWV0aG9kOiJQT1NUIixib2R5OmZkfSk7dmFyIGQ9YXdhaXQgci5qc29uKCk7aWYoIXIub2spe3Rocm93IG5ldyBFcnJvcihkLmVycm9yfHxyLnN0YXR1c1RleHQpO31yZXR1cm4gZC51cmx8fGQuZGF0YTt9ZG9jdW1lbnQucXVlcnlTZWxlY3RvckFsbCgiYnV0dG9uLFtyb2xlPWJ1dHRvbl0iKS5mb3JFYWNoKGZ1bmN0aW9uKGIpe2lmKC91cGxvYWR8YnJvd3NlfGNob29zZS9pLnRlc3QoYi50ZXh0Q29udGVudCkpe2IuYWRkRXZlbnRMaXN0ZW5lcigiY2xpY2siLGZ1bmN0aW9uKCl7ZmkuY2xpY2soKTt9KTt9fSk7ZmkuYWRkRXZlbnRMaXN0ZW5lcigiY2hhbmdlIixhc3luYyBmdW5jdGlvbigpe2Zvcih2YXIgZiBvZiBmaS5maWxlcyl7dHJ5e3ZhciB1PWF3YWl0IHVwKGYpO3Byb21wdCgiVXBsb2FkZWQhIFlvdXIgbGluazoiLHUpO31jYXRjaChlKXthbGVydCgiRmFpbGVkOiAiK2UubWVzc2FnZSk7fX19KTtkb2N1bWVudC5hZGRFdmVudExpc3RlbmVyKCJkcmFnb3ZlciIsZnVuY3Rpb24oZSl7ZS5wcmV2ZW50RGVmYXVsdCgpO30pO2RvY3VtZW50LmFkZEV2ZW50TGlzdGVuZXIoImRyb3AiLGFzeW5jIGZ1bmN0aW9uKGUpe2UucHJldmVudERlZmF1bHQoKTtmb3IodmFyIGYgb2YgZS5kYXRhVHJhbnNmZXIuZmlsZXMpe3RyeXt2YXIgdT1hd2FpdCB1cChmKTtwcm9tcHQoIlVwbG9hZGVkISBZb3VyIGxpbms6Iix1KTt9Y2F0Y2goZSl7YWxlcnQoIkZhaWxlZDogIitlLm1lc3NhZ2UpO319fSk7fSgpKTs8L3NjcmlwdD48L2JvZHk+PC9odG1sPgoK");
-  return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+  const cachedResponse = await cache.match(cacheKey);
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+  const response = new Response(`
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" name="viewport">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="description" content="Cloudflare-powered media hosting for images, videos, audio, and documents (up to 20MB). Secure and scalable storage using Telegram as backend.">
+    <meta name="keywords" content="Cloudflare Hosting, Media Hosting, Cloudflare Workers, Image Hosting, Video Hosting, TG BOT, AR Hosting">
+    <meta name="author" content="Ashlynn Repository">
+    <meta name="robots" content="index, follow">
+    <meta name="canonical" content="https://ar-hosting.pages.dev/">
+    <meta property="og:title" content="AR Hosting - Fast & Secure Media Hosting">
+    <meta property="og:description" content="Host images, videos, audio, and docs securely via Cloudflare pages with Telegram storage backend. Scalable, fast, and reliable.">
+    <meta property="og:image" content="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
+    <meta property="og:url" content="https://ar-hosting.pages.dev/">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="AR Hosting - Fast & Secure Media Hosting">
+    <meta name="twitter:description" content="Host images, videos, audio, and docs securely via Cloudflare pages with Telegram storage backend. Scalable, fast, and reliable.">
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
+    <title>AR Hosting - Fast & Secure Media Hosting</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png" type="image/x-icon">
+  
+    <!-- Performance hints -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+  
+    <!-- Toastr -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+  
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  
+    <!-- Lucide (icons) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+  
+    <!-- Manifest -->
+    <link rel="manifest" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Files/manifest.json">
+  
+    <!-- Inline base styles and variables -->
+    <style>
+      :root {
+        --primary-color: #6366f1;
+        --primary-color-2: #4f46e5;
+        --primary-light: rgba(99, 102, 241, 0.14);
+        --success-color: #22c55e;
+        --danger-color: #ef4444;
+        --warning-color: #f59e0b;
+        --info-color: #06b6d4;
+        --gray-50: #f8fafc;
+        --gray-100: #f1f5f9;
+        --gray-200: #e2e8f0;
+        --gray-300: #cbd5e1;
+        --gray-400: #94a3b8;
+        --gray-500: #64748b;
+        --gray-600: #475569;
+        --gray-700: #334155;
+        --gray-800: #1f2937;
+        --surface: rgba(255,255,255,0.08);
+        --surface-opaque: rgba(255,255,255,0.9);
+        --radius: 14px;
+        --radius-sm: 10px;
+        --shadow-1: 0 8px 30px rgba(2,6,23,0.08);
+        --shadow-2: 0 12px 40px rgba(2,6,23,0.14);
+        --backdrop: blur(10px);
+      }
+  
+      [data-theme="light"] {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f8fafc;
+        --text-primary: #1f2937;
+        --text-secondary: #6b7280;
+        --border-color: #e5e7eb;
+      }
+  
+      [data-theme="dark"] {
+        --bg-primary: #0b0f17;
+        --bg-secondary: #111827;
+        --text-primary: #f9fafb;
+        --text-secondary: #d1d5db;
+        --border-color: #374151;
+      }
+  
+      body {
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        transition: background-color 0.5s ease, color 0.5s ease;
+      }
+  
+      body.dark-mode {
+        background: radial-gradient(1200px 600px at 10% 10%, rgba(99,102,241,0.06), transparent), 
+                    radial-gradient(1100px 600px at 90% 20%, rgba(56,189,248,0.06), transparent), 
+                    #0b0f17;
+      }
+  
+      body.light-mode {
+        background: radial-gradient(1200px 600px at 10% 10%, rgba(99,102,241,0.03), transparent), 
+                    radial-gradient(1100px 600px at 90% 20%, rgba(56,189,248,0.03), transparent), 
+                    linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      }
+  
+      .glass {
+        background: rgba(17, 24, 39, 0.6);
+        border: 1px solid rgba(148,163,184,0.12);
+        backdrop-filter: var(--backdrop);
+        -webkit-backdrop-filter: var(--backdrop);
+        box-shadow: var(--shadow-1);
+        transition: all 0.3s ease;
+      }
+  
+      .light-mode .glass {
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(209, 213, 219, 0.6);
+        color: #1f2937;
+      }
+  
+      .glass:hover {
+        box-shadow: var(--shadow-2);
+        transform: translateY(-2px);
+      }
+  
+      .divider {
+        border-color: rgba(148,163,184,0.2) !important;
+      }
+  
+      .light-mode .divider {
+        border-color: rgba(209, 213, 219, 0.6) !important;
+      }
+  
+      .bg-grid {
+        background-image: radial-gradient(rgba(148,163,184,0.08) 1px, transparent 1px);
+        background-size: 20px 20px;
+        background-position: -10px -10px;
+      }
+  
+      .light-mode .bg-grid {
+        background-image: radial-gradient(rgba(148,163,184,0.15) 1px, transparent 1px);
+      }
+  
+      .btn-like {
+        transition: transform .15s ease, box-shadow .15s ease, background-color .2s ease, color .2s ease;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(148,163,184,0.18);
+        background: rgba(17,24,39,0.6);
+      }
+  
+      .light-mode .btn-like {
+        background: rgba(255,255,255,0.8);
+        border: 1px solid rgba(209,213,219,0.6);
+        color: #374151;
+      }
+  
+      .btn-like:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(2,6,23,0.18);
+      }
+  
+      .kbd {
+        border: 1px solid rgba(148,163,184,0.25);
+        background: rgba(15,23,42,0.8);
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-size: 12px;
+        color: #cbd5e1;
+      }
+  
+      .light-mode .kbd {
+        background: rgba(255,255,255,0.9);
+        color: #374151;
+        border: 1px solid rgba(209,213,219,0.8);
+      }
+  
+      .bg-hero {
+        background: linear-gradient(180deg, rgba(12, 16, 24, 0.0), rgba(12, 16, 24, 0.25));
+      }
+  
+      .shadow-focus {
+        box-shadow: 0 0 0 6px rgba(99,102,241,0.2) !important;
+      }
+  
+      /* Animations */
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+  
+      @keyframes slideIn {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(0); }
+      }
+  
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+  
+      @keyframes bounce {
+        0%, 20%, 53%, 80%, 100% { transform: translate3d(0,0,0); }
+        40%, 43% { transform: translate3d(0,-8px,0); }
+        70% { transform: translate3d(0,-4px,0); }
+        90% { transform: translate3d(0,-2px,0); }
+      }
+  
+      .animate-fadeIn {
+        animation: fadeIn 0.6s ease-out;
+      }
+  
+      .animate-slideIn {
+        animation: slideIn 0.5s ease-out;
+      }
+  
+      .animate-pulse {
+        animation: pulse 2s infinite;
+      }
+  
+      .animate-bounce {
+        animation: bounce 1s ease infinite;
+      }
+  
+      /* Toastr dark tune */
+      .toast {
+        border-radius: 10px !important;
+        background-color: rgba(17,24,39,0.9) !important;
+        border: 1px solid rgba(148,163,184,0.2) !important;
+        color: #e5e7eb !important;
+        backdrop-filter: blur(6px);
+      }
+  
+      .light-mode .toast {
+        background-color: rgba(255,255,255,0.9) !important;
+        color: #374151 !important;
+        border: 1px solid rgba(209,213,219,0.6) !important;
+      }
+  
+      .toast-success { border-left: 4px solid var(--success-color) !important; }
+      .toast-error   { border-left: 4px solid var(--danger-color) !important; }
+      .toast-warning { border-left: 4px solid var(--warning-color) !important; }
+      .toast-info    { border-left: 4px solid var(--info-color) !important; }
+  
+      /* subtle scrollbars */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148,163,184,0.35) transparent;
+      }
+  
+      *::-webkit-scrollbar { height: 8px; width: 8px; }
+      *::-webkit-scrollbar-thumb { 
+        background-color: rgba(148,163,184,0.35); 
+        border-radius: 999px; 
+      }
+      *::-webkit-scrollbar-track { background: transparent; }
+  
+      .light-mode *::-webkit-scrollbar-thumb {
+        background-color: rgba(156,163,175,0.5);
+      }
+  
+      /* Loading spinner */
+      .spinner {
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #6366f1;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        animation: spin 1s linear infinite;
+      }
+  
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+  
+      /* File upload progress */
+      .progress-bar {
+        width: 100%;
+        height: 4px;
+        background: rgba(148,163,184,0.2);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+  
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        transition: width 0.3s ease;
+      }
+  
+      /* Floating animation */
+      .float {
+        animation: float 3s ease-in-out infinite;
+      }
+  
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen antialiased selection:bg-indigo-500/30 selection:text-indigo-100 dark-mode">
+    <!-- Background layers -->
+    <div id="background" class="fixed inset-0 -z-10 opacity-90 transition-opacity bg-center bg-cover bg-no-repeat bg-hero"></div>
+    <div class="bg-grid fixed inset-0 -z-10 pointer-events-none"></div>
+  
+    <!-- Top Controls -->
+    <div class="w-full max-w-6xl mx-auto px-4 md:px-6 pt-6 flex items-center justify-between animate-fadeIn">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center justify-center w-9 h-9 rounded-md bg-indigo-500/15 border border-indigo-400/20 float">
+          <span class="text-indigo-300 font-semibold tracking-tight">AR</span>
+        </div>
+        <div class="hidden sm:flex flex-col">
+          <span class="text-sm text-slate-300 dark-mode:text-slate-700">Fast & Secure Media Hosting</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="viewCacheBtn" title="View History" class="btn-like h-9 px-3 flex items-center gap-2 text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900">
+          <i class="fas fa-history text-slate-300 dark-mode:text-slate-500"></i>
+          <span class="hidden sm:inline text-sm">History</span>
+        </button>
+        <button id="compressionToggleBtn" title="Toggle Compression" class="btn-like h-9 px-3 flex items-center gap-2 text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900">
+          <i class="fas fa-compress-alt text-slate-300 dark-mode:text-slate-500"></i>
+          <span class="hidden sm:inline text-sm">Compression</span>
+        </button>
+        <button id="urlUploadBtn" title="Upload from URL" class="btn-like h-9 px-3 flex items-center gap-2 text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900">
+          <i class="fas fa-link text-slate-300 dark-mode:text-slate-500"></i>
+          <span class="hidden sm:inline text-sm">From URL</span>
+        </button>
+        <button id="themeToggle" title="Toggle dark mode" class="btn-like h-9 w-9 grid place-items-center text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900 transition-all duration-300">
+          <i class="fas fa-moon"></i>
+        </button>
+      </div>
+    </div>
+  
+    <!-- Main Card -->
+    <main class="w-full max-w-3xl mx-auto px-4 md:px-6 py-8 animate-fadeIn" style="animation-delay: 0.1s;">
+      <section class="glass rounded-[14px] p-6 md:p-8">
+        <header class="flex items-center justify-between pb-5 border-b divider">
+          <h1 class="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-3">
+            <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-500/15 border border-indigo-400/20 animate-pulse">
+              <i class="fas fa-cloud-upload-alt text-indigo-300"></i>
+            </span>
+            <span class="text-slate-100 dark-mode:text-slate-800">AR Hosting</span>
+          </h1>
+          <div class="flex items-center gap-2 sm:hidden">
+            <button id="viewCacheBtn_clone" class="hidden"></button>
+            <button id="compressionToggleBtn_clone" class="hidden"></button>
+            <button id="urlUploadBtn_clone" class="hidden"></button>
+          </div>
+        </header>
+  
+        <!-- Dropzone -->
+        <div class="mt-6">
+          <div id="dropZone" class="relative rounded-xl border border-dashed divider p-8 md:p-10 text-center hover:border-indigo-400/50 hover:bg-indigo-500/5 transition-all duration-300 cursor-pointer group">
+            <div class="mx-auto flex flex-col items-center gap-3">
+              <div class="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-400/20 grid place-items-center group-hover:scale-110 transition-transform duration-300">
+                <i class="fas fa-cloud-upload-alt text-indigo-300 text-xl"></i>
+              </div>
+              <p class="text-slate-100 dark-mode:text-slate-800 font-medium">Drag & drop files here</p>
+              <p class="text-slate-400 dark-mode:text-slate-500 text-sm">or click to browse (max 20MB each)</p>
+            </div>
+            <input id="fileInput" name="file" type="file" multiple class="absolute inset-0 opacity-0 cursor-pointer" />
+          </div>
+          <div id="uploadProgress" class="hidden mt-4">
+            <div class="progress-bar">
+              <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <p id="progressText" class="text-sm text-slate-400 dark-mode:text-slate-500 mt-2 text-center">Uploading...</p>
+          </div>
+        </div>
+  
+        <!-- Actions -->
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button id="urlBtn" type="button" class="btn-like h-11 w-full flex items-center justify-center gap-2 text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900 transition-all duration-300 hover:scale-105">
+            <i class="fas fa-link text-slate-300 dark-mode:text-slate-500"></i>
+            <span class="font-medium">URL</span>
+          </button>
+          <button id="qrBtn" type="button" class="btn-like h-11 w-full flex items-center justify-center gap-2 text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900 transition-all duration-300 hover:scale-105">
+            <i class="fas fa-qrcode text-slate-300 dark-mode:text-slate-500"></i>
+            <span class="font-medium">QR Code</span>
+          </button>
+          <button id="markdownBtn" type="button" class="btn-like h-11 w-full flex items-center justify-center gap-2 text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900 transition-all duration-300 hover:scale-105">
+            <i class="fab fa-markdown text-slate-300 dark-mode:text-slate-500"></i>
+            <span class="font-medium">Markdown</span>
+          </button>
+        </div>
+  
+        <!-- Results -->
+        <div id="resultContainer" class="hidden mt-6 animate-fadeIn">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-slate-200 dark-mode:text-slate-700 font-medium">Your File Links</span>
+            <button id="copyBtn" class="btn-like h-9 px-3 flex items-center gap-2 text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900 transition-all duration-300 hover:scale-105">
+              <i class="fas fa-copy text-slate-300 dark-mode:text-slate-500"></i>
+              <span class="text-sm">Copy</span>
+            </button>
+          </div>
+          <textarea id="fileLink" readonly placeholder="Your file links will appear here..." class="w-full min-h-[120px] max-h-[260px] rounded-lg bg-slate-900/60 dark-mode:bg-slate-100/60 border divider p-3 text-sm text-slate-200 dark-mode:text-slate-700 focus:outline-none focus:ring-0 focus:border-indigo-400/60 transition-all duration-300"></textarea>
+        </div>
+  
+        <!-- History -->
+        <div id="cacheContent" class="hidden mt-5 max-h-72 overflow-y-auto rounded-lg bg-slate-900/50 dark-mode:bg-slate-100/50 border divider p-2 animate-fadeIn"></div>
+  
+        <!-- Footer Links -->
+        <footer class="pt-6 mt-6 border-t divider text-center animate-fadeIn" style="animation-delay: 0.2s;">
+          <p class="text-slate-400 dark-mode:text-slate-500 text-sm mb-1">Go To -
+            <a class="text-indigo-300 dark-mode:text-indigo-500 hover:text-indigo-200 dark-mode:hover:text-indigo-400 underline-offset-4 hover:underline transition-colors duration-300" href="https://ar-hosting.pages.dev/docs" target="_blank" rel="noopener noreferrer">About | API Page</a>
+          </p>
+          <p class="text-slate-400 dark-mode:text-slate-500 text-sm">Made with ❤️ by -
+            <a class="text-indigo-300 dark-mode:text-indigo-500 hover:text-indigo-200 dark-mode:hover:text-indigo-400 underline-offset-4 hover:underline transition-colors duration-300" href="https://t.me/Ashlynn_Repository" target="_blank" rel="noopener noreferrer">Ashlynn Repository</a>
+          </p>
+        </footer>
+      </section>
+    </main>
+  
+    <!-- Modal: URL Upload -->
+    <div id="urlModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300"></div>
+      <div class="relative w-full max-w-lg glass rounded-2xl p-6 animate-fadeIn">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg md:text-xl font-semibold tracking-tight flex items-center gap-2 text-slate-100 dark-mode:text-slate-800">
+            <i class="fas fa-link text-slate-300 dark-mode:text-slate-500"></i> Upload from URL
+          </h3>
+          <button id="closeUrlModal" class="text-slate-400 dark-mode:text-slate-500 hover:text-slate-200 dark-mode:hover:text-slate-700 text-xl leading-none transition-colors duration-300">&times;</button>
+        </div>
+        <div>
+          <input id="urlInput" type="url" placeholder="https://example.com/file.jpg" required class="w-full h-11 rounded-lg bg-slate-900/60 dark-mode:bg-slate-100/60 border divider px-3 text-slate-200 dark-mode:text-slate-700 placeholder:text-slate-500 dark-mode:placeholder:text-slate-400 focus:outline-none focus:border-indigo-400/60 transition-all duration-300" />
+          <div id="urlSpinner" class="hidden w-9 h-9 rounded-full border-2 border-slate-600 border-t-indigo-400 animate-spin mx-auto mt-4"></div>
+        </div>
+        <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button id="uploadUrlBtn" class="h-11 rounded-lg bg-emerald-500/90 hover:bg-emerald-500 text-white font-medium transition-all duration-300 hover:scale-105 transform">Upload</button>
+          <button id="cancelUrlBtn" class="h-11 rounded-lg btn-like text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900 transition-all duration-300">Cancel</button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Modal: QR -->
+    <div id="qrModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300"></div>
+      <div class="relative w-full max-w-lg glass rounded-2xl p-6 animate-fadeIn">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg md:text-xl font-semibold tracking-tight flex items-center gap-2 text-slate-100 dark-mode:text-slate-800">
+            <i class="fas fa-qrcode text-slate-300 dark-mode:text-slate-500"></i> QR Code
+          </h3>
+          <button id="closeQrModal" class="text-slate-400 dark-mode:text-slate-500 hover:text-slate-200 dark-mode:hover:text-slate-700 text-xl leading-none transition-colors duration-300">&times;</button>
+        </div>
+        <div>
+          <div id="qrUrlDisplay" class="w-full rounded-lg bg-slate-900/60 dark-mode:bg-slate-100/60 border divider px-3 py-2 text-slate-300 dark-mode:text-slate-600 text-sm break-words max-h-28 overflow-y-auto"></div>
+          <div class="mt-4 flex items-center justify-center">
+            <div id="qrcode" class="rounded-lg bg-white p-3 shadow-lg"></div>
+          </div>
+        </div>
+        <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button id="downloadQr" class="h-11 rounded-lg bg-emerald-500/90 hover:bg-emerald-500 text-white font-medium transition-all duration-300 hover:scale-105 transform">Download</button>
+          <button id="closeQrBtn" class="h-11 rounded-lg btn-like text-slate-200 hover:text-white dark-mode:text-slate-700 dark-mode:hover:text-slate-900 transition-all duration-300">Close</button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+    <!-- Lenis (smooth scroll) -->
+    <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.27/bundled/lenis.min.js"></script>
+  
+    <!-- Contact form -->
+    <script src="https://cdn.jsdelivr.net/gh/Itz-Ashlynn/contact@master/src/contact.min.js"
+      id="contactform"
+      error_text=""
+      success_text=""
+      disable_waittime="true"
+      form_worker_url="https://contact.ashlynn.workers.dev/">
+    </script>
+  
+    <script>
+      // Smooth scroll (Lenis)
+      try {
+        const lenis = new Lenis({ smoothWheel: true, lerp: 0.12, syncTouch: true });
+        function raf(t) { lenis.raf(t); requestAnimationFrame(raf); }
+        requestAnimationFrame(raf);
+      } catch (e) { /* no-op */ }
+  
+      // Lucide icons
+      try { lucide.createIcons({ attrs: { 'stroke-width': 1.5 } }); } catch (e) {}
+  
+      const backgroundImages = [
+        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/1.webp",
+        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/2.webp",
+        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/3.webp",
+        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/4.webp",
+        "https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/5.webp"
+      ];
+  
+      function setBackgroundImages() {
+        const background = document.getElementById('background');
+        let currentIndex = 0;
+  
+        function updateBackground() {
+          background.style.backgroundImage = \`url(\${backgroundImages[currentIndex]})\`;
+          background.style.opacity = '0.90';
+        }
+  
+        backgroundImages.forEach(url => { const img = new Image(); img.decoding = 'async'; img.loading = 'eager'; img.src = url; });
+        updateBackground();
+  
+        setInterval(() => {
+          background.style.opacity = '0';
+          setTimeout(() => {
+            currentIndex = (currentIndex + 1) % backgroundImages.length;
+            updateBackground();
+          }, 900);
+        }, 5200);
+      }
+  
+      $(document).ready(function() {
+        let originalImageURLs = [];
+        let isCacheVisible = false;
+        let enableCompression = true;
+        let currentQRCode = null;
+        let currentQRUrl = '';
+        let isDarkMode = localStorage.getItem('darkMode') !== 'false'; // Default to dark mode
+  
+        try {
+          setBackgroundImages();
+          initTheme();
+          initBindings();
+          $('body').addClass('loaded');
+        } catch (error) {
+          console.error('Initialization error:', error);
+          showToast('Failed to initialize some components. Please refresh the page.', 'error');
+        }
+  
+        function initTheme() {
+          if (isDarkMode) {
+            enableDarkMode();
+          } else {
+            disableDarkMode();
+          }
+        }
+  
+        function enableDarkMode() {
+          $('body').removeClass('light-mode').addClass('dark-mode');
+          $('#themeToggle').html('<i class="fas fa-sun"></i>');
+          localStorage.setItem('darkMode', 'true');
+          isDarkMode = true;
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+  
+        function disableDarkMode() {
+          $('body').removeClass('dark-mode').addClass('light-mode');
+          $('#themeToggle').html('<i class="fas fa-moon"></i>');
+          localStorage.setItem('darkMode', 'false');
+          isDarkMode = false;
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+  
+        function initBindings() {
+          // Theme toggle
+          $('#themeToggle').on('click', function() { 
+            isDarkMode ? disableDarkMode() : enableDarkMode(); 
+          });
+  
+          // File input
+          $('#fileInput').on('change', handleFileSelection);
+  
+          // Drag & drop
+          const dropZone = $('#dropZone');
+          dropZone.on('dragover', function(e) { 
+            e.preventDefault(); 
+            dropZone.addClass('ring-2 ring-indigo-400/50 scale-105'); 
+          });
+          dropZone.on('dragleave', function() { 
+            dropZone.removeClass('ring-2 ring-indigo-400/50 scale-105'); 
+          });
+          dropZone.on('drop', function(e) {
+            e.preventDefault();
+            dropZone.removeClass('ring-2 ring-indigo-400/50 scale-105');
+            const files = e.originalEvent.dataTransfer.files;
+            if (files.length > 0) {
+              $('#fileInput')[0].files = files;
+              handleFileSelection();
+            }
+          });
+  
+          // Compression toggle
+          $('#compressionToggleBtn').on('click', function() {
+            enableCompression = !enableCompression;
+            const icon = $(this).find('i');
+            icon.toggleClass('fa-compress-alt fa-expand-alt');
+            $(this).attr('title', enableCompression ? 'Turn off compression' : 'Turn on compression');
+            showToast(enableCompression ? 'Compression enabled' : 'Compression disabled', 'info');
+          });
+  
+          // URL modal
+          $('#urlUploadBtn').on('click', function() {
+            $('#urlModal').removeClass('hidden').addClass('flex');
+            $('#urlInput').val('').focus();
+          });
+          $('#closeUrlModal, #cancelUrlBtn').on('click', function() {
+            $('#urlModal').addClass('hidden').removeClass('flex');
+          });
+          $('#uploadUrlBtn').on('click', uploadFromURL);
+  
+          // Close modals on backdrop click
+          $('#urlModal, #qrModal').on('click', function(e) {
+            if (e.target === this) $(this).addClass('hidden').removeClass('flex');
+          });
+  
+          // ESC to close
+          $(document).on('keyup', function(e) {
+            if (e.key === 'Escape') {
+              $('#urlModal, #qrModal').addClass('hidden').removeClass('flex');
+            }
+          });
+  
+          // Actions
+          $('#urlBtn, #qrBtn, #markdownBtn').on('click', handleActionButtonClick);
+  
+          // QR modal close
+          $('#closeQrModal, #closeQrBtn').on('click', function() {
+            $('#qrModal').addClass('hidden').removeClass('flex');
+          });
+  
+          // Download QR
+          $('#downloadQr').on('click', downloadQRCode);
+  
+          // View cache
+          $('#viewCacheBtn').on('click', toggleCacheView);
+  
+          // Copy
+          $('#copyBtn').on('click', copyToClipboard);
+  
+          // Cache item click
+          $(document).on('click', '.cache-item', handleCacheItemClick);
+  
+          // Enter key for URL upload
+          $('#urlInput').on('keypress', function(e) {
+            if (e.which === 13) { // Enter key
+              $('#uploadUrlBtn').click();
+            }
+          });
+        }
+  
+        async function handleFileSelection() {
+          const files = $('#fileInput')[0].files;
+          if (files.length === 0) return;
+  
+          let validFiles = true;
+          let totalSize = 0;
+          const maxTotalSize = 100 * 1024 * 1024;
+  
+          for (let file of files) {
+            if (file.size > 20 * 1024 * 1024) {
+              showToast(\`File "\${file.name}" exceeds 20MB limit\`, 'error');
+              validFiles = false;
+            }
+            totalSize += file.size;
+          }
+          if (totalSize > maxTotalSize) {
+            showToast('Total file size exceeds 100MB limit', 'error');
+            validFiles = false;
+          }
+          if (!validFiles) { $('#fileInput').val(''); return; }
+  
+          $('#uploadProgress').removeClass('hidden');
+          $('#progressFill').css('width', '0%');
+          $('#progressText').text('Preparing files...');
+  
+          let successCount = 0, errorCount = 0;
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            try {
+              // Update progress
+              const progress = ((i / files.length) * 100).toFixed(0);
+              $('#progressFill').css('width', \`\${progress}%\`);
+              $('#progressText').text(\`Uploading $\{i + 1}/\${files.length}: $\{file.name}\`);
+  
+              const fileHash = await calculateFileHash(file);
+              const cachedData = getCachedData(fileHash);
+              if (cachedData) {
+                handleCachedFile(cachedData);
+                successCount++;
+              } else {
+                await uploadFile(file, fileHash);
+                successCount++;
+              }
+            } catch (error) {
+              console.error('Error processing file:', file.name, error);
+              showToast(\`Failed to process $\{file.name}: $\{error.message || 'Unknown error'}\`, 'error');
+              errorCount++;
+            }
+          }
+  
+          // Final progress update
+          $('#progressFill').css('width', '100%');
+          $('#progressText').text('Upload complete!');
+          
+          setTimeout(() => {
+            $('#uploadProgress').addClass('hidden');
+          }, 2000);
+  
+          if (successCount > 0) {
+            if (errorCount > 0) {
+              showToast(\`Upload completed with $\{errorCount} error$\{errorCount > 1 ? 's' : ''}. $\{successCount} file$\{successCount > 1 ? 's' : ''} uploaded successfully.\`, 'warning');
+            } else {
+              showToast(\`All $\{successCount} file$\{successCount > 1 ? 's' : ''} uploaded successfully!\`, 'success');
+            }
+          } else {
+            showToast('No files were uploaded successfully.', 'error');
+          }
+        }
+  
+        function getCachedData(fileHash) {
+          const cacheData = JSON.parse(localStorage.getItem('uploadCache')) || [];
+          return cacheData.find(item => item.hash === fileHash);
+        }
+  
+        function handleCachedFile(cachedData) {
+          if (!originalImageURLs.includes(cachedData.url)) {
+            originalImageURLs.push(cachedData.url);
+            updateFileLinkDisplay();
+            showToast(\`Loaded "\${cachedData.fileName}" from cache\`, 'info');
+          } else {
+            showToast(\`File "\${cachedData.fileName}" already uploaded\`, 'info');
+          }
+        }
+  
+        function updateFileLinkDisplay() {
+          $('#fileLink').val(originalImageURLs.join('\\n'));
+          $('#resultContainer').removeClass('hidden');
+          adjustTextareaHeight($('#fileLink')[0]);
+        }
+  
+        async function calculateFileHash(file) {
+          const arrayBuffer = await file.arrayBuffer();
+          const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+  
+        async function uploadFile(file, fileHash) {
+          try {
+            let uploadFile = file;
+            if (enableCompression && file.type.startsWith('image/') && file.type !== 'image/gif') {
+              uploadFile = await compressImage(file);
+            }
+            const formData = new FormData();
+            formData.append('file', uploadFile, file.name);
+  
+            const response = await fetch('/upload', { method: 'POST', body: formData });
+            if (!response.ok) throw new Error(\`Server returned \${response.status}\`);
+  
+            const data = await response.json();
+            if (data.error) {
+              throw new Error(data.error);
+            } else {
+              originalImageURLs.push(data.data);
+              updateFileLinkDisplay();
+              saveToLocalCache(data.data, file.name, fileHash);
+            }
+          } catch (error) {
+            console.error('Upload error:', error);
+            throw error;
+          }
+        }
+  
+        async function compressImage(file, quality = 0.75) {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, img.width, img.height);
+              canvas.toBlob(blob => {
+                resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+              }, 'image/jpeg', quality);
+            };
+            img.src = URL.createObjectURL(file);
+          });
+        }
+  
+        async function uploadFromURL() {
+          const url = $('#urlInput').val().trim();
+          if (!url) { showToast('Please enter a valid URL', 'error'); return; }
+          try { new URL(url); } catch (e) { showToast('Please enter a valid URL', 'error'); return; }
+  
+          $('#urlSpinner').removeClass('hidden');
+          $('#uploadUrlBtn').prop('disabled', true);
+  
+          try {
+            // Use the correct endpoint for URL upload
+            const response = await fetch(\`/hosturl?url=\${encodeURIComponent(url)}\`);
+            if (!response.ok) throw new Error(\`Server returned \${response.status}\`);
+            
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            if (data.data || data.url) {
+              const fileUrl = data.data || data.url;
+              originalImageURLs.push(fileUrl);
+              updateFileLinkDisplay();
+              saveToLocalCache(fileUrl, data.filename || url.split('/').pop() || 'URL File', await calculateURLHash(url));
+              showToast('File uploaded from URL successfully!', 'success');
+              $('#urlModal').addClass('hidden').removeClass('flex');
+            } else {
+              throw new Error('No URL returned from server');
+            }
+          } catch (error) {
+            console.error('URL upload error:', error);
+            showToast(error.message || 'Failed to upload from URL', 'error');
+          } finally {
+            $('#urlSpinner').addClass('hidden');
+            $('#uploadUrlBtn').prop('disabled', false);
+          }
+        }
+  
+        async function calculateURLHash(url) {
+          const encoder = new TextEncoder();
+          const data = encoder.encode(url);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+  
+        function handleActionButtonClick() {
+          const links = originalImageURLs.filter(url => url);
+          if (!links.length) {
+            showToast('No URLs available', 'error');
+            return;
+          }
+  
+          switch (this.id) {
+            case 'urlBtn': {
+              const urlText = links.join('\\n');
+              $('#fileLink').val(urlText);
+              adjustTextareaHeight($('#fileLink')[0]);
+              copyToClipboard(urlText);
+              break;
+            }
+            case 'markdownBtn': {
+              const markdownText = links.map(url => \`![image](\${url})\`).join('\\n');
+              $('#fileLink').val(markdownText);
+              adjustTextareaHeight($('#fileLink')[0]);
+              copyToClipboard(markdownText);
+              break;
+            }
+            case 'qrBtn': {
+              generateQRCode(links[0]);
+              break;
+            }
+          }
+        }
+  
+        function generateQRCode(url) {
+          if (currentQRCode) {
+            currentQRCode.clear();
+            document.getElementById('qrcode').innerHTML = '';
+          }
+          currentQRUrl = url;
+          document.getElementById('qrUrlDisplay').textContent = url;
+  
+          const modal = document.getElementById('qrModal');
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+  
+          setTimeout(() => {
+            try {
+              currentQRCode = new QRCode(document.getElementById("qrcode"), {
+                text: url,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+              });
+            } catch (error) {
+              console.error('QR Code generation error:', error);
+              showToast('Failed to generate QR code', 'error');
+              modal.classList.add('hidden');
+              modal.classList.remove('flex');
+            }
+          }, 200);
+        }
+  
+        function downloadQRCode() {
+          const canvas = document.querySelector('#qrcode canvas');
+          if (canvas) {
+            try {
+              const link = document.createElement('a');
+              const fileName = \`qr-code-\${currentQRUrl.replace(/[^a-z0-9]/gi, '-').substring(0, 20)}-\${Date.now()}.png\`;
+              link.download = fileName;
+              link.href = canvas.toDataURL('image/png');
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              showToast('QR code downloaded!', 'success');
+            } catch (error) {
+              console.error('Download error:', error);
+              showToast('Failed to download QR code', 'error');
+            }
+          } else {
+            showToast('QR code not generated yet', 'error');
+          }
+        }
+  
+        function adjustTextareaHeight(textarea) {
+          textarea.style.height = 'auto';
+          textarea.style.height = Math.min(textarea.scrollHeight, 260) + 'px';
+        }
+  
+        function copyToClipboard(textOpt) {
+          const text = typeof textOpt === 'string' ? textOpt : $('#fileLink').val();
+          if (!text) { showToast('No content to copy', 'error'); return; }
+          navigator.clipboard.writeText(text)
+            .then(() => showToast('Copied to clipboard!', 'success', false, 1000))
+            .catch((err) => {
+              console.error('Copy error:', err);
+              showToast('Copy failed!', 'error');
+            });
+        }
+  
+        function saveToLocalCache(url, fileName, fileHash) {
+          const cacheData = JSON.parse(localStorage.getItem('uploadCache')) || [];
+          // Remove duplicates
+          const filteredCache = cacheData.filter(item => item.hash !== fileHash);
+          filteredCache.push({
+            url,
+            fileName,
+            hash: fileHash,
+            timestamp: new Date().toLocaleString('en-US', { hour12: true })
+          });
+          // Keep only last 50 items
+          const trimmedCache = filteredCache.slice(-50);
+          localStorage.setItem('uploadCache', JSON.stringify(trimmedCache));
+        }
+  
+        function toggleCacheView() {
+          const cacheData = JSON.parse(localStorage.getItem('uploadCache')) || [];
+          const $cacheContent = $('#cacheContent');
+  
+          if (isCacheVisible) {
+            $cacheContent.slideUp(220, () => $cacheContent.empty());
+            isCacheVisible = false;
+          } else {
+            $cacheContent.empty();
+            if (cacheData.length) {
+              cacheData.slice().reverse().forEach(item => {
+                $('<button class="cache-item w-full text-left px-3 py-2 rounded-md bg-slate-800/60 hover:bg-slate-800 transition flex items-center justify-between border divider dark-mode:bg-slate-200/60 dark-mode:hover:bg-slate-200"></button>')
+                  .html(\`<span class="truncate pr-3 text-slate-200 dark-mode:text-slate-700">\${item.fileName}</span><span class="text-xs text-slate-400 dark-mode:text-slate-500">\${item.timestamp}</span>\`)
+                  .data('url', item.url)
+                  .appendTo($cacheContent);
+              });
+            } else {
+              $cacheContent.append('<div class="px-3 py-2 text-slate-400 dark-mode:text-slate-500">No history yet!</div>');
+            }
+            $cacheContent.slideDown(220);
+            isCacheVisible = true;
+          }
+        }
+  
+        function handleCacheItemClick() {
+          originalImageURLs = [$(this).data('url')];
+          updateFileLinkDisplay();
+        }
+  
+        function showToast(message, type = 'info', persistent = false, timeout = 3000) {
+          const toastOptions = {
+            positionClass: 'toast-bottom-right',
+            progressBar: true,
+            newestOnTop: true,
+            closeButton: true,
+            timeOut: persistent ? 0 : timeout,
+            extendedTimeOut: 1000,
+            tapToDismiss: !persistent,
+            preventDuplicates: true,
+            showMethod: 'fadeIn',
+            hideMethod: 'fadeOut',
+            closeMethod: 'fadeOut'
+          };
+          switch (type) {
+            case 'success': return toastr.success(message, '', toastOptions);
+            case 'error':   return toastr.error(message, '', toastOptions);
+            case 'warning': return toastr.warning(message, '', toastOptions);
+            default:        return toastr.info(message, '', toastOptions);
+          }
+        }
+      });
+    </script>
+  </body>
+  </html>
+`, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+  await cache.put(cacheKey, response.clone());
+  return response;
 }
 
 async function handleAdminRequest(DATABASE, request, USERNAME, PASSWORD) {
@@ -659,7 +2456,7 @@ async function generateAdminPage(DATABASE) {
       <p>✓ All files loaded</p>
     </div>
     <div class="footer">
-      Commonthread Admin Panel
+      AR Hosting Admin Panel
     </div>
   </body>
   </html>     
@@ -692,10 +2489,10 @@ async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASS
     const file = formData.get('file');
     if (!file) throw new Error('Missing files');
     if (file.size > maxSize) {
-      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
     }
     if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
     }
     const uploadFormData = new FormData();
     uploadFormData.append("chat_id", TG_CHAT_ID);
@@ -740,34 +2537,34 @@ async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASS
       size: file.size,
       uploaded_on: new Date(timestamp).toISOString(),
       media_type: file.type,
-      creator: 'https://media.dhyey.cc'
+      creator: 'https://t.me/Ashlynn_Repository'
     };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
   } catch (error) {
     console.error('Internal Server Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
   }
 }
 
 async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
   try {
     if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
     }
     const url = new URL(request.url);
     const fileUrl = url.searchParams.get('url');
     if (!fileUrl) {
-      return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+      return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
     }
     const fileResponse = await fetch(fileUrl);
     if (!fileResponse.ok) {
-      return new Response(JSON.stringify({ error: 'Failed to download file from URL' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+      return new Response(JSON.stringify({ error: 'Failed to download file from URL' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
     }
     const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
     const fileName = new URL(fileUrl).pathname.split('/').pop() || 'downloaded-file';
     const fileBuffer = await fileResponse.arrayBuffer();
     if (fileBuffer.byteLength > maxSize) {
-      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
     }
     const file = new File([fileBuffer], fileName, { type: contentType });
     const uploadFormData = new FormData();
@@ -814,12 +2611,12 @@ async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, P
       size: fileBuffer.byteLength,
       uploaded_on: new Date(timestamp).toISOString(),
       media_type: contentType,
-      creator: 'https://media.dhyey.cc'
+      creator: 'https://t.me/Ashlynn_Repository'
     };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
   } catch (error) {
     console.error('Internal Server Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + Commonthread Media API', 'X-API-Version': '6.0', 'X-Creator': 'https://media.dhyey.cc' } });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + AR MEDIA API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Ashlynn_Repository' } });
   }
 }
 
@@ -837,8 +2634,8 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src * data: blob:; script-src 'self' https: 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; font-src 'self' https: data:; connect-src *; base-uri 'self'; object-src 'none'; form-action 'self'">
     <meta name="robots" content="noindex">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>404 - Page Not Found | Commonthread</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/commonthread/TG-MediaHost-Bot/main/Images/commonthread.png">
+    <title>404 - Page Not Found | AR Hosting</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png">
   
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"></noscript>
@@ -866,8 +2663,8 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     <header class="fixed inset-x-0 top-0 z-50">
       <nav id="top-nav" class="mx-auto flex items-center justify-between px-4 md:px-6 py-3 backdrop-blur-xl bg-black/60 border-b border-white/10 transition-all duration-300">
         <a href="/" class="group inline-flex items-center gap-3">
-          <img src="https://raw.githubusercontent.com/commonthread/TG-MediaHost-Bot/main/Images/commonthread.png" alt="Commonthread" class="h-9 w-9 rounded-full ring-1 ring-white/10">
-          <span class="text-lg font-semibold tracking-tight text-transparent bg-clip-text" style="background-image: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1), rgba(244,63,94,0.95));">Commonthread</span>
+          <img src="https://raw.githubusercontent.com/Itz-Ashlynn/TG-MediaHost-Bot/main/Images/ar-hosting.png" alt="AR Hosting" class="h-9 w-9 rounded-full ring-1 ring-white/10">
+          <span class="text-lg font-semibold tracking-tight text-transparent bg-clip-text" style="background-image: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1), rgba(244,63,94,0.95));">AR Hosting</span>
         </a>
   
         <div class="flex items-center gap-2">
@@ -984,7 +2781,7 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
                       <p class="text-sm font-medium text-zinc-50">Need help?</p>
                       <p class="text-sm text-zinc-400">
                         Visit our
-                        <a href="https://media.dhyey.cc" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">TG Channel</a>
+                        <a href="https://t.me/Ashlynn_Repository" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">TG Channel</a>
                         for assistance.
                       </p>
                     </div>
@@ -1046,7 +2843,7 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     <footer class="fixed inset-x-0 bottom-0 z-40">
       <div class="mx-auto w-full px-4 md:px-6 py-3 backdrop-blur-xl bg-black/60 border-t border-white/10">
         <p class="text-center text-xs text-zinc-400">
-          © 2025 <a href="/" class="text-orange-200 hover:text-orange-100 transition-colors font-medium">Commonthread</a>
+          © 2025 <a href="/" class="text-orange-200 hover:text-orange-100 transition-colors font-medium">AR Hosting</a>
         </p>
       </div>
     </footer>
@@ -1356,217 +3153,4 @@ async function handleDeleteImagesRequest(request, DATABASE, USERNAME, PASSWORD) 
   } catch (error) {
     return new Response(JSON.stringify({ error: 'Deletion failed', details: error.message }), { status: 500 });
   }
-}
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Telegram Bot Webhook Handler (@Imagehostssbot)
-// Users send media → bot replies with hosted media.dhyey.cc URL
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * handleSetWebhook — one-time setup endpoint.
- * Visit https://media.dhyey.cc/set-webhook?secret=YOUR_BOT_TOKEN once after deploy.
- */
-async function handleSetWebhook(request, domain, TG_BOT_TOKEN) {
-  const url = new URL(request.url);
-  const secret = url.searchParams.get('secret');
-  if (!secret || secret !== TG_BOT_TOKEN) {
-    return new Response(JSON.stringify({ error: 'Invalid secret' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  const webhookUrl = `https://${domain}/telegram`;
-  const apiUrl = `https://api.telegram.org/bot${TG_BOT_TOKEN}/setWebhook`;
-  const res = await fetch(apiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      url: webhookUrl,
-      allowed_updates: ['message'],
-      drop_pending_updates: true
-    })
-  });
-  const data = await res.json();
-  return new Response(JSON.stringify({ webhook: webhookUrl, telegram: data }, null, 2), {
-    status: res.ok ? 200 : 500,
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
-
-/**
- * handleTelegramWebhook — processes incoming Telegram updates.
- * Supported media types: photo, video, document, audio, voice, animation (GIF).
- * On success: replies to the user with the hosted CDN URL.
- * On text /start: sends a welcome message.
- */
-async function handleTelegramWebhook(request, DATABASE, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
-  let update;
-  try {
-    update = await request.json();
-  } catch {
-    return new Response('Bad Request', { status: 400 });
-  }
-
-  const message = update.message;
-  if (!message) return new Response('OK', { status: 200 });
-
-  const chatId = message.chat.id;
-  const tgApiBase = `https://api.telegram.org/bot${TG_BOT_TOKEN}`;
-
-  // ── /start command ──────────────────────────────────────────────────────────
-  if (message.text && message.text.startsWith('/start')) {
-    await tgSendMessage(tgApiBase, chatId,
-      `👋 Welcome to *Commonthread Media Host*!\n\n` +
-      `Send me any *photo*, *video*, *document*, *audio*, or *GIF* and I'll upload it to our CDN and reply with a direct link.\n\n` +
-      `🌐 Hosted at: https://${domain}\n` +
-      `📏 Max file size: ${Math.round(maxSize / 1024 / 1024)} MB`
-    );
-    return new Response('OK', { status: 200 });
-  }
-
-  // ── /help command ───────────────────────────────────────────────────────────
-  if (message.text && message.text.startsWith('/help')) {
-    await tgSendMessage(tgApiBase, chatId,
-      `*Commonthread Bot Help*\n\n` +
-      `• Send any media file (photo, video, document, audio, GIF)\n` +
-      `• I'll upload it and reply with a permanent CDN link\n` +
-      `• Share the link anywhere — it's public & direct\n\n` +
-      `📏 Max size: ${Math.round(maxSize / 1024 / 1024)} MB per file\n` +
-      `🌐 Domain: https://${domain}`
-    );
-    return new Response('OK', { status: 200 });
-  }
-
-  // ── Determine media type and extract file_id + filename ────────────────────
-  let fileId = null;
-  let fileName = null;
-  let fileSize = null;
-
-  if (message.photo && message.photo.length > 0) {
-    // Take the highest-resolution photo
-    const photo = message.photo[message.photo.length - 1];
-    fileId = photo.file_id;
-    fileName = `photo_${Date.now()}.jpg`;
-    fileSize = photo.file_size || 0;
-  } else if (message.video) {
-    fileId = message.video.file_id;
-    fileName = message.video.file_name || `video_${Date.now()}.mp4`;
-    fileSize = message.video.file_size || 0;
-  } else if (message.document) {
-    fileId = message.document.file_id;
-    fileName = message.document.file_name || `file_${Date.now()}`;
-    fileSize = message.document.file_size || 0;
-  } else if (message.audio) {
-    fileId = message.audio.file_id;
-    fileName = message.audio.file_name || `audio_${Date.now()}.mp3`;
-    fileSize = message.audio.file_size || 0;
-  } else if (message.voice) {
-    fileId = message.voice.file_id;
-    fileName = `voice_${Date.now()}.ogg`;
-    fileSize = message.voice.file_size || 0;
-  } else if (message.animation) {
-    fileId = message.animation.file_id;
-    fileName = message.animation.file_name || `animation_${Date.now()}.gif`;
-    fileSize = message.animation.file_size || 0;
-  } else if (message.sticker) {
-    fileId = message.sticker.file_id;
-    fileName = `sticker_${Date.now()}.webp`;
-    fileSize = message.sticker.file_size || 0;
-  } else {
-    // Unsupported message type — ignore silently
-    return new Response('OK', { status: 200 });
-  }
-
-  // ── File size check ─────────────────────────────────────────────────────────
-  if (fileSize > maxSize) {
-    await tgSendMessage(tgApiBase, chatId,
-      `❌ File too large (${Math.round(fileSize / 1024 / 1024)} MB).\nMax allowed: ${Math.round(maxSize / 1024 / 1024)} MB.`
-    );
-    return new Response('OK', { status: 200 });
-  }
-
-  // ── Send "uploading…" feedback ──────────────────────────────────────────────
-  await tgSendMessage(tgApiBase, chatId, '⏳ Uploading to CDN…');
-
-  try {
-    // 1. Forward the file to TG_CHAT_ID (private storage channel) to get a stable file_id
-    const forwardRes = await fetch(`${tgApiBase}/forwardMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TG_CHAT_ID,
-        from_chat_id: chatId,
-        message_id: message.message_id
-      })
-    });
-    const forwardData = await forwardRes.json();
-
-    // Extract stable file_id from the forwarded message in the storage channel
-    let storedFileId = fileId; // fallback
-    if (forwardData.ok && forwardData.result) {
-      const fwd = forwardData.result;
-      if (fwd.photo) storedFileId = fwd.photo[fwd.photo.length - 1].file_id;
-      else if (fwd.video) storedFileId = fwd.video.file_id;
-      else if (fwd.document) storedFileId = fwd.document.file_id;
-      else if (fwd.audio) storedFileId = fwd.audio.file_id;
-      else if (fwd.voice) storedFileId = fwd.voice.file_id;
-      else if (fwd.animation) storedFileId = fwd.animation.file_id;
-      else if (fwd.sticker) storedFileId = fwd.sticker.file_id;
-    }
-
-    // 2. Build the CDN URL and store in D1
-    const fileExtension = fileName.split('.').pop().toLowerCase();
-    const timestamp = Date.now();
-    const cdnUrl = `https://${domain}/${timestamp}.${fileExtension}`;
-
-    await DATABASE.prepare(
-      'INSERT INTO media (url, fileId, filename) VALUES (?, ?, ?) ON CONFLICT(url) DO NOTHING'
-    ).bind(cdnUrl, storedFileId, fileName).run();
-
-    // 3. Reply to the user with the CDN link
-    const replyText =
-      `✅ *Uploaded successfully!*\n\n` +
-      `🔗 *Direct Link:*\n\`${cdnUrl}\`\n\n` +
-      `📄 File: ${fileName}\n` +
-      `🌐 Powered by [Commonthread](https://${domain})`;
-
-    await tgSendMessage(tgApiBase, chatId, replyText, message.message_id);
-return new Response(JSON.stringify({
-  success: true,
-  url: cdnUrl,
-  filename: fileName
-}), {
-  status: 200,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-  } catch (err) {
-    console.error('Telegram webhook upload error:', err);
-    await tgSendMessage(tgApiBase, chatId,
-      `❌ Upload failed. Please try again.\n\nError: ${err.message}`
-    );
-  }
-
-  return new Response('OK', { status: 200 });
-}
-
-/**
- * Helper: send a Markdown message via Telegram Bot API.
- */
-async function tgSendMessage(apiBase, chatId, text, replyToMessageId = null) {
-  const body = {
-    chat_id: chatId,
-    text: text,
-    parse_mode: 'Markdown',
-    disable_web_page_preview: true
-  };
-  if (replyToMessageId) body.reply_to_message_id = replyToMessageId;
-  return fetch(`${apiBase}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
 }

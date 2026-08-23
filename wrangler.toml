@@ -1,0 +1,19 @@
+name = "commonthread"
+main = "_worker.js"
+compatibility_date = "2026-08-23"
+
+# Cloudflare D1 Database Binding
+[[d1_databases]]
+binding = "DATABASE"
+database_name = "commonthread_db"
+database_id = "<YOUR_D1_DATABASE_ID>"
+
+# Environment Variables
+[vars]
+DOMAIN = "media.dhyey.cc"                          # Your deployed domain (without protocol)
+USERNAME = "admin"                                  # Required: Username for /admin, /admin/api/media, /delete-images
+PASSWORD = "your_secure_password"                  # Required: Password for /admin panel
+ENABLE_AUTH = "false"                              # Optional: "true" to lock root (/) and uploads behind Basic Auth
+TG_BOT_TOKEN = "8697778513:AAFSOAjD_-7urYb5cGGgfL2a037ge0wnb4w"  # @Imagehostssbot token
+TG_CHAT_ID = "-1004472369244"                      # Telegram Channel / Group ID where media is stored
+MAX_SIZE_MB = "50"                                 # Max upload file size in MB (Telegram Bot API hard limit: 50 MB)

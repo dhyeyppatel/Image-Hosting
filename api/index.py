@@ -6,11 +6,11 @@ import base64
 app = Flask(__name__)
 
 # Environment variables
-TG_BOT_TOKEN = os.environ.get('TG_BOT_TOKEN')
-CF_DOMAIN = os.environ.get('CF_DOMAIN')
-CF_USERNAME = os.environ.get('CF_USERNAME', 'admin')
-CF_PASSWORD = os.environ.get('CF_PASSWORD', 'dhyey')
-TG_CHAT_ID = os.environ.get('TG_CHAT_ID')
+TG_BOT_TOKEN = os.environ.get('TG_BOT_TOKEN', '').strip()
+CF_DOMAIN = os.environ.get('CF_DOMAIN', '').strip()
+CF_USERNAME = os.environ.get('CF_USERNAME', 'admin').strip()
+CF_PASSWORD = os.environ.get('CF_PASSWORD', 'dhyey').strip()
+TG_CHAT_ID = os.environ.get('TG_CHAT_ID', '').strip()
 
 @app.route('/', methods=['GET'])
 def index():

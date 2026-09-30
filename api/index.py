@@ -61,8 +61,20 @@ def webhook():
 
     if not file_id:
         # Ignore text messages or send a help message
-        if "text" in message and message["text"] == "/start":
-            send_message(chat_id, "Welcome to CommonThread Media Host!\n\nSend me any photo, video, or document and I will instantly upload it and give you a direct hosting link.")
+        if "text" in message and message["text"].startswith("/start"):
+            welcome_text = (
+                "<b>👋 Welcome to CommonThread Media Host!</b>\n\n"
+                "I am your lightning-fast, edge-cached media hosting assistant. "
+                "Send me any photo, video, or document and I will instantly upload it and provide you with a direct hosting link.\n\n"
+                "<i>Max file size: 50MB</i>"
+            )
+            reply_markup = {
+                "inline_keyboard": [
+                    [{"text": "🌐 Visit Website", "url": f"https://{CF_DOMAIN}"}],
+                    [{"text": "📊 Admin Dashboard", "url": f"https://{CF_DOMAIN}/admin"}]
+                ]
+            }
+            send_message(chat_id, welcome_text, reply_markup=reply_markup)
         return "OK", 200
 
     # We need to ensure the file is also sent to the admin channel (TG_CHAT_ID)
@@ -78,7 +90,7 @@ def webhook():
             pass
             
     # Send processing message
-    processing_msg = send_message(chat_id, "Processing your upload...")
+    processing_msg = send_message(chat_id, "⏳ <b>Processing your upload...</b>")
 
     # Now we call our Cloudflare Worker API to register the file_id
     cf_url = f"https://{CF_DOMAIN}/api/register"
@@ -102,39 +114,70 @@ def webhook():
         if res.status_code == 200:
             data = res.json()
             hosted_url = data.get("url")
-            # Reply to user
-            text = f"✅ **Upload Successful!**\n\n🔗 [Direct Link]({hosted_url})\n\n`{hosted_url}`"
-            send_message(chat_id, text, reply_to_message_id=message["message_id"])
+            
+            text = (
+                "✅ <b>Upload Successful!</b>\n\n"
+                f"🔗 <b>Direct Link:</b> <a href='{hosted_url}'>{hosted_url}</a>\n\n"
+                f"<code>{hosted_url}</code>\n\n"
+                f"<i>Tap the link above to copy it instantly.</i>"
+            )
+            
+            reply_markup = {
+                "inline_keyboard": [
+                    [{"text": "↗️ Open File", "url": hosted_url}, {"text": "🔗 Share", "url": f"https://t.me/share/url?url={hosted_url}"}]
+                ]
+            }
+            
+            if processing_msg and "result" in processing_msg:
+                edit_message(chat_id, processing_msg["result"]["message_id"], text, reply_markup=reply_markup)
+            else:
+                send_message(chat_id, text, reply_to_message_id=message["message_id"], reply_markup=reply_markup)
         else:
-            send_message(chat_id, f"❌ Cloudflare Error: {res.text}")
+            err_msg = f"❌ <b>Cloudflare Error</b>\n\n<code>{res.text}</code>"
+            if processing_msg and "result" in processing_msg:
+                edit_message(chat_id, processing_msg["result"]["message_id"], err_msg)
+            else:
+                send_message(chat_id, err_msg)
     except Exception as e:
-        send_message(chat_id, f"❌ Bot Error: {str(e)}")
-        
-    # Delete processing message if needed
-    if processing_msg:
-        try:
-            msg_id = processing_msg["result"]["message_id"]
-            requests.post(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/deleteMessage", json={
-                "chat_id": chat_id,
-                "message_id": msg_id
-            })
-        except:
-            pass
+        err_msg = f"❌ <b>Bot Error</b>\n\n<code>{str(e)}</code>"
+        if processing_msg and "result" in processing_msg:
+            edit_message(chat_id, processing_msg["result"]["message_id"], err_msg)
+        else:
+            send_message(chat_id, err_msg)
 
     return "OK", 200
 
-def send_message(chat_id, text, reply_to_message_id=None):
+def send_message(chat_id, text, reply_to_message_id=None, reply_markup=None):
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "Markdown",
+        "parse_mode": "HTML",
         "disable_web_page_preview": True
     }
     if reply_to_message_id:
         payload["reply_to_message_id"] = reply_to_message_id
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
         
     try:
         res = requests.post(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage", json=payload)
+        return res.json()
+    except:
+        return None
+
+def edit_message(chat_id, message_id, text, reply_markup=None):
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+        
+    try:
+        res = requests.post(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/editMessageText", json=payload)
         return res.json()
     except:
         return None

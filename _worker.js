@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     const domain = env.DOMAIN;
@@ -92,7 +92,7 @@ async function serveDocumentationPage() {
   <!-- Top Nav -->
   <header class="fixed inset-x-0 top-0 z-50">
     <nav id="top-nav" class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6 backdrop-blur-xl border-b border-white/10 transition-all duration-300" style="background: linear-gradient(to bottom, rgba(10,10,10,0.72), rgba(10,10,10,0.55));">
-      <a href="https://media.dhyey.cc/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
+      <a href="https://media-hosting.dhyeyp254.workers.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
         <div class="relative">
           <img src="https://api.iconify.design/lucide:link.svg" alt="CommonThread Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
           <div class="absolute -inset-2 rounded-full opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" style="background: radial-gradient(circle, rgba(251,146,60,0.45), transparent 60%);">
@@ -129,7 +129,7 @@ async function serveDocumentationPage() {
     <div class="relative mx-auto max-w-sm px-4 pt-20">
       <div id="mobile-panel" class="rounded-2xl border border-white/10 bg-zinc-950/80 ring-1 ring-white/10 divide-y divide-white/10 opacity-0 translate-y-2 transition-all duration-300 shadow-2xl shadow-black/60" style="transform: translateZ(0);">
         <div class="p-4">
-          <a href="https://media.dhyey.cc/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
+          <a href="https://media-hosting.dhyeyp254.workers.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
             <img src="https://api.iconify.design/lucide:link.svg" alt="CommonThread Logo" class="h-8 w-8 rounded-full ring-1 ring-white/10">
             <span class="text-base font-semibold tracking-tight bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
               CommonThread
@@ -302,11 +302,11 @@ async function serveDocumentationPage() {
               <ul class="mt-1 space-y-2 text-zinc-300">
                 <li class="text-sm">
                   <span class="font-medium text-white">POST:</span>
-                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://media.dhyey.cc/upload</code>
+                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://media-hosting.dhyeyp254.workers.dev/upload</code>
                 </li>
                 <li class="text-sm">
                   <span class="font-medium text-white">GET:</span>
-                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://media.dhyey.cc/hosturl?url=[media_url]</code>
+                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://media-hosting.dhyeyp254.workers.dev/hosturl?url=[media_url]</code>
                 </li>
               </ul>
             </div>
@@ -357,7 +357,7 @@ async function serveDocumentationPage() {
 
               <h4 class="mt-6 text-base font-medium text-white">Usage Example (cURL)</h4>
               <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-code">curl -X POST https://media.dhyey.cc/upload \
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-code">curl -X POST https://media-hosting.dhyeyp254.workers.dev/upload \
   -H "Content-Type: multipart/form-data" \
   -F "file=@path/to/your/file.jpg"</code></pre>
                 <button data-copy="#bash-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
@@ -372,7 +372,7 @@ async function serveDocumentationPage() {
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
 
-  fetch('https://media.dhyey.cc/upload', {
+  fetch('https://media-hosting.dhyeyp254.workers.dev/upload', {
     method: 'POST',
     body: formData
   })
@@ -431,7 +431,7 @@ async function serveDocumentationPage() {
 
               <h4 class="mt-6 text-base font-medium text-white">Usage Example</h4>
               <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-get-code">https://media.dhyey.cc/hosturl?url=https://example.com/path/to/media.jpg</code></pre>
+                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-get-code">https://media-hosting.dhyeyp254.workers.dev/hosturl?url=https://example.com/path/to/media.jpg</code></pre>
                 <button data-copy="#bash-get-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
                   <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
                   Copy
@@ -455,8 +455,8 @@ async function serveDocumentationPage() {
               <p class="mt-2 text-sm text-zinc-300 sm:text-base">A successful upload will return a JSON object with the following details:</p>
               <div class="relative mt-2">
                 <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="success-response-code">{
-    "data": "https://media.dhyey.cc/1753020712833.png",
-    "url": "https://media.dhyey.cc/1753020712833.png",
+    "data": "https://media-hosting.dhyeyp254.workers.dev/1753020712833.png",
+    "url": "https://media-hosting.dhyeyp254.workers.dev/1753020712833.png",
     "filename": "2nNV2I4.png",
     "size": 83638,
     "uploaded_on": "2025-07-20T14:11:52.833Z",
@@ -600,7 +600,7 @@ async function serveDocumentationPage() {
             <span class="iconify h-5 w-5" data-icon="lucide:send" data-inline="false"></span>
           </a>
 
-          <a href="https://media.dhyey.cc" target="_blank" aria-label="GitHub Profile" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
+          <a href="https://media-hosting.dhyeyp254.workers.dev" target="_blank" aria-label="GitHub Profile" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
             <span class="iconify h-5 w-5" data-icon="lucide:github" data-inline="false"></span>
           </a>
         </div>

@@ -1101,7 +1101,7 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
       const h = JSON.parse(localStorage.getItem('ct_history') || '[]');
       if (h.length === 0) { hp.style.display = 'none'; return; }
       hp.style.display = 'block';
-      hl.innerHTML = h.map(url => '        <li class="history-item">          <a href="' + url + '" target="_blank">' + url + '</a>          <button style="background:none;border:none;color:var(--muted);cursor:pointer;" onclick="navigator.clipboard.writeText(\'' + url + '\');showToast(\'Copied!\')">            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>          </button>        </li>').join('');
+      hl.innerHTML = h.map(url => '        <li class="history-item">          <a href="' + url + '" target="_blank">' + url + '</a>          <button style="background:none;border:none;color:var(--muted);cursor:pointer;" onclick="navigator.clipboard.writeText(&quot;' + url + '&quot;);showToast(&quot;Copied!&quot;)">            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>          </button>        </li>').join('');
     }
     renderHistory();
   </script>

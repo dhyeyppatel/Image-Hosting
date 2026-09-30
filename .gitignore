@@ -1,0 +1,5 @@
+wrangler.toml
+.wrangler/
+newUI.txt
+.env
+__pycache__/

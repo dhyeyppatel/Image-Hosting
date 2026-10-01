@@ -12,6 +12,10 @@
   ],
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/public/index.html"
+    },
+    {
       "source": "/webhook",
       "destination": "/api/index.py"
     },

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CommonThread - Media Hosting</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg: #0e0e0e; --panel: #1a1a1a; --text: #eaeaea; --muted: #888; --accent: #f0a500; --border: #333; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { width: 100%; max-width: 640px; margin-top: 2rem; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+    .logo { font-weight: 600; font-size: 1.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 1rem; font-size: 0.9rem; }
+    .nav-links a { color: var(--muted); }
+    .nav-links a:hover { color: var(--text); }
+    
+    .upload-zone { border: 1px dashed var(--border); border-radius: 8px; padding: 3rem 2rem; text-align: center; background: var(--panel); cursor: pointer; transition: border-color 0.2s; position: relative; overflow: hidden; }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); }
+    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .upload-msg { font-size: 1rem; font-weight: 500; margin-bottom: 0.5rem; }
+    .upload-hint { font-size: 0.85rem; color: var(--muted); }
+    
+    .url-upload { margin-top: 1rem; display: flex; gap: 0.5rem; }
+    .url-upload input { flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 0.75rem 1rem; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; outline: none; }
+    .url-upload input:focus { border-color: var(--accent); }
+    .url-upload button { background: var(--text); color: var(--bg); border: none; padding: 0 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    .url-upload button:hover { background: #fff; }
+    
+    .progress-bar { height: 2px; background: var(--border); margin-top: 1rem; border-radius: 2px; overflow: hidden; display: none; }
+    .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.2s; }
+    
+    .result-panel { margin-top: 2rem; display: none; }
+    .result-header { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem; display: flex; justify-content: space-between; }
+    .format-toggles { display: flex; gap: 0.5rem; }
+    .format-toggles button { background: none; border: none; color: var(--muted); font-size: 0.8rem; cursor: pointer; }
+    .format-toggles button.active { color: var(--accent); font-weight: 600; }
+    .result-box { display: flex; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .result-box input { flex: 1; background: transparent; border: none; color: var(--text); padding: 0.75rem 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; outline: none; }
+    .copy-btn { background: transparent; border: none; border-left: 1px solid var(--border); color: var(--text); padding: 0 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; }
+    .copy-btn:hover { background: rgba(255,255,255,0.05); }
+    
+    .preview-img { max-width: 100%; max-height: 200px; border-radius: 6px; margin-top: 1rem; border: 1px solid var(--border); display: none; object-fit: contain; background: #000; }
+    
+    .history { margin-top: 3rem; }
+    .history h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 1rem; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .history-list { list-style: none; display: grid; gap: 0.5rem; }
+    .history-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--panel); border-radius: 6px; border: 1px solid var(--border); font-size: 0.85rem; }
+    .history-item a { font-family: 'JetBrains Mono', monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%; }
+    
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--panel); border: 1px solid var(--border); padding: 0.75rem 1.25rem; border-radius: 6px; font-size: 0.9rem; font-weight: 500; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+        Common<span>Thread</span>
+      </div>
+      <div class="nav-links">
+        <a href="/admin">Admin</a>
+        <a href="/docs">API</a>
+      </div>
+    </header>
+
+    <div class="upload-zone" id="dropzone">
+      <input type="file" id="fileInput">
+      <div class="upload-msg">Click or drag a file here</div>
+      <div class="upload-hint">Up to 20MB. Images, videos, documents.</div>
+    </div>
+    
+    <div class="url-upload">
+      <input type="text" id="urlInput" placeholder="Or paste a URL directly... (Ctrl+K)">
+      <button id="urlBtn">Fetch</button>
+    </div>
+
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="result-panel" id="resultPanel">
+      <div class="result-header">
+        <span>File Ready</span>
+        <div class="format-toggles" id="formatToggles">
+          <button class="active" data-format="url">URL</button>
+          <button data-format="md">Markdown</button>
+          <button data-format="bb">BBCode</button>
+          <button data-format="html">HTML</button>
+        </div>
+      </div>
+      <div class="result-box">
+        <input type="text" id="resultInput" readonly>
+        <button class="copy-btn" id="copyBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+      </div>
+      <img id="previewImg" class="preview-img" alt="Preview">
+    </div>
+
+    <div class="history" id="historyPanel" style="display: none;">
+      <h3>Recent Uploads</h3>
+      <ul class="history-list" id="historyList"></ul>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Copied to clipboard</div>
+
+  <script>
+    const dz = document.getElementById('dropzone');
+    const fi = document.getElementById('fileInput');
+    const ui = document.getElementById('urlInput');
+    const ub = document.getElementById('urlBtn');
+    const pb = document.getElementById('progressBar');
+    const pf = document.getElementById('progressFill');
+    const rp = document.getElementById('resultPanel');
+    const ri = document.getElementById('resultInput');
+    const cb = document.getElementById('copyBtn');
+    const toast = document.getElementById('toast');
+    const pi = document.getElementById('previewImg');
+    const hl = document.getElementById('historyList');
+    const hp = document.getElementById('historyPanel');
+    const toggles = document.querySelectorAll('.format-toggles button');
+    
+    let currentUrl = '';
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'k') { e.preventDefault(); ui.focus(); }
+    });
+    
+    document.addEventListener('paste', (e) => {
+      if (document.activeElement === ui || document.activeElement === ri) return;
+      if (e.clipboardData.files.length) { handleFile(e.clipboardData.files[0]); }
+    });
+
+    // Drag & Drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => e.preventDefault()));
+    ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, () => dz.classList.add('dragover')));
+    ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, () => dz.classList.remove('dragover')));
+    dz.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+    fi.addEventListener('change', () => { if (fi.files.length) handleFile(fi.files[0]); });
+    
+    ub.addEventListener('click', () => {
+      if (ui.value) uploadUrl(ui.value);
+    });
+    ui.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && ui.value) uploadUrl(ui.value);
+    });
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      setTimeout(() => toast.style.display = 'none', 3000);
+    }
+    
+    function setProgress(percent) {
+      if (percent === 0) { pb.style.display = 'block'; pf.style.width = '0%'; }
+      else if (percent >= 100) { pf.style.width = '100%'; setTimeout(() => pb.style.display = 'none', 500); }
+      else { pf.style.width = percent + '%'; }
+    }
+
+    function showResult(url, isImage) {
+      currentUrl = url;
+      rp.style.display = 'block';
+      updateFormat();
+      
+      if (isImage) { pi.src = url; pi.style.display = 'block'; } 
+      else { pi.style.display = 'none'; }
+      
+      saveHistory(url);
+    }
+
+    toggles.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        toggles.forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        updateFormat();
+      });
+    });
+
+    function updateFormat() {
+      const format = document.querySelector('.format-toggles .active').dataset.format;
+      let out = currentUrl;
+      if (format === 'md') out = '![Image](' + currentUrl + ')';
+      if (format === 'bb') out = '[img]' + currentUrl + '[/img]';
+      if (format === 'html') out = '<img src="' + currentUrl + '" alt="Image" />';
+      ri.value = out;
+    }
+
+    cb.addEventListener('click', () => {
+      ri.select();
+      document.execCommand('copy');
+      showToast('Copied to clipboard');
+    });
+
+    async function handleFile(file) {
+      if (file.size > 20 * 1024 * 1024) return showToast('File exceeds 20MB limit');
+      setProgress(0);
+      const fd = new FormData();
+      fd.append('file', file);
+      
+      // Fake progress
+      let p = 10;
+      const int = setInterval(() => { p += Math.random()*20; if(p>85)p=85; setProgress(p); }, 200);
+
+      try {
+        const res = await fetch('https://media-hosting.dhyeyp254.workers.dev/upload', { method: 'POST', body: fd });
+        clearInterval(int);
+        setProgress(100);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        showResult(data.url, file.type.startsWith('image/'));
+      } catch (err) {
+        clearInterval(int);
+        setProgress(100);
+        showToast('Upload failed: ' + err.message);
+      }
+    }
+
+    async function uploadUrl(url) {
+      setProgress(0);
+      let p = 10;
+      const int = setInterval(() => { p += Math.random()*20; if(p>85)p=85; setProgress(p); }, 200);
+      try {
+        const res = await fetch('https://media-hosting.dhyeyp254.workers.dev/hosturl?url=' + encodeURIComponent(url));
+        clearInterval(int);
+        setProgress(100);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        showResult(data.url, true);
+        ui.value = '';
+      } catch (err) {
+        clearInterval(int);
+        setProgress(100);
+        showToast('Fetch failed: ' + err.message);
+      }
+    }
+    
+    function saveHistory(url) {
+      let h = JSON.parse(localStorage.getItem('ct_history') || '[]');
+      h = [url, ...h.filter(x => x !== url)].slice(0, 5);
+      localStorage.setItem('ct_history', JSON.stringify(h));
+      renderHistory();
+    }
+    
+    function renderHistory() {
+      const h = JSON.parse(localStorage.getItem('ct_history') || '[]');
+      if (h.length === 0) { hp.style.display = 'none'; return; }
+      hp.style.display = 'block';
+      hl.innerHTML = h.map(url => '        <li class="history-item">          <a href="' + url + '" target="_blank">' + url + '</a>          <button style="background:none;border:none;color:var(--muted);cursor:pointer;" onclick="navigator.clipboard.writeText(\'' + url + '\');showToast(\'Copied!\')">            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>          </button>        </li>').join('');
+    }
+    renderHistory();
+  </script>
+</body>
+</html>

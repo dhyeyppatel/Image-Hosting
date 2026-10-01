@@ -1,5 +1,22 @@
-﻿export default {
+export default {
   async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+      });
+    }
+    
+    const response = await this.handleRequest(request, env);
+    const newResponse = new Response(response.body, response);
+    newResponse.headers.set('Access-Control-Allow-Origin', '*');
+    return newResponse;
+  },
+
+  async handleRequest(request, env) {
     const { pathname } = new URL(request.url);
     const domain = env.DOMAIN;
     const DATABASE = env.DATABASE;

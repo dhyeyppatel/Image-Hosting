@@ -7,7 +7,8 @@ app = Flask(__name__)
 
 # Environment variables
 TG_BOT_TOKEN = os.environ.get('TG_BOT_TOKEN', '').strip()
-CF_DOMAIN = os.environ.get('CF_DOMAIN', '').strip()
+CF_DOMAIN = os.environ.get('CF_DOMAIN', 'media-hosting.dhyeyp254.workers.dev').strip()
+CF_API_KEY = os.environ.get('CF_API_KEY', '').strip() or os.environ.get('API_KEY', '').strip() or 'ct_dev_bbd2ae65abc5464d7965effceccf4fa8'
 CF_USERNAME = os.environ.get('CF_USERNAME', 'admin').strip()
 CF_PASSWORD = os.environ.get('CF_PASSWORD', 'dhyey').strip()
 TG_CHAT_ID = os.environ.get('TG_CHAT_ID', '').strip()
@@ -95,13 +96,17 @@ def webhook():
 
     # Now we call our Cloudflare Worker API to register the file_id
     cf_url = f"https://{CF_DOMAIN}/api/register"
-    auth_str = f"{CF_USERNAME}:{CF_PASSWORD}"
-    encoded_auth = base64.b64encode(auth_str.encode()).decode()
-    
     headers = {
-        "Authorization": f"Basic {encoded_auth}",
         "Content-Type": "application/json"
     }
+    
+    if CF_API_KEY:
+        headers["X-API-Key"] = CF_API_KEY
+        
+    if CF_USERNAME and CF_PASSWORD:
+        auth_str = f"{CF_USERNAME}:{CF_PASSWORD}"
+        encoded_auth = base64.b64encode(auth_str.encode()).decode()
+        headers["Authorization"] = f"Basic {encoded_auth}"
     
     payload = {
         "fileId": file_id,

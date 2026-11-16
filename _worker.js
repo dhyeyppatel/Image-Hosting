@@ -81,7 +81,7 @@ export default {
     // Route: Telegram Bot Media Registration (from Vercel webhook)
     if (pathname === '/api/register') {
       return request.method === 'POST'
-        ? await handleApiRegisterRequest(request, DATABASE, domain, USERNAME, PASSWORD)
+        ? await handleApiRegisterRequest(request, env, domain, USERNAME, PASSWORD)
         : new Response('Method Not Allowed', { status: 405 });
     }
 
@@ -829,11 +829,17 @@ async function handleApiDeleteRequest(request, DATABASE, USERNAME, PASSWORD) {
 }
 
 // Telegram Bot Register Request (POST /api/register)
-async function handleApiRegisterRequest(request, DATABASE, domain, USERNAME, PASSWORD) {
+async function handleApiRegisterRequest(request, env, domain, USERNAME, PASSWORD) {
   try {
-    if (!authenticate(request, USERNAME, PASSWORD)) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    const isBasicAuth = authenticate(request, USERNAME, PASSWORD);
+    const keyCheck = await validateApiKey(request, env);
+    if (!isBasicAuth && !keyCheck.valid) {
+      return new Response(JSON.stringify({ error: 'Unauthorized. Provide valid admin credentials or developer API key.' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
+    const DATABASE = env.DATABASE;
     const data = await request.json();
     const { fileId, originalFileName, fileExtension, fileSize, mediaType } = data;
     if (!fileId) return new Response(JSON.stringify({ error: 'Missing fileId' }), { status: 400 });

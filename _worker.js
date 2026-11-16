@@ -1311,6 +1311,8 @@ async function handleImageRequest(request, env) {
       headers
     });
   }
+
+  let filePath = null;
   let attempts = 0;
   while (attempts < 3) {
     const getFilePath = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/getFile?file_id=${fileId}`);
@@ -1345,6 +1347,8 @@ async function handleImageRequest(request, env) {
   const headers = new Headers(response.headers);
   headers.set('Content-Type', contentType);
   headers.set('Accept-Ranges', 'bytes');
+  headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
 
   const shouldForceDownload = EXECUTABLE_EXTENSIONS.has(fileExtension);
   const cleanFilename = (result.filename || `file.${fileExtension}`).replace(/[^\w\.\-\s]/g, '_');

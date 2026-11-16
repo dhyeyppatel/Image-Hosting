@@ -115,7 +115,7 @@ You can issue tokens to other developers so they can use your platform in their 
 | **Bandwidth / Egress** | Unlimited ($0) | Unlimited ($0) | Unlimited ($0) |
 | **Seeking / Streaming** | Standard Range | High-Speed Native Edge Streaming | Dedicated Edge Route |
 | **Token Format** | `ct_dev_...` | Priority `ct_dev_...` | Multi-token RBAC |
-| **How to Request** | Instant via `/admin` | Email [dhyeyp254@gmail.com](mailto:dhyeyp254@gmail.com) | Contact Sales |
+| **How to Request** | Instant via `/admin` | Email [dhyeyhosts@gmail.com](mailto:dhyeyhosts@gmail.com) | Contact Sales |
 
 *View the full interactive comparison at [`/pricing`](https://media-hosting.dhyeyp254.workers.dev/pricing).*
 

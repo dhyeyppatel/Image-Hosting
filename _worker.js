@@ -107,6 +107,11 @@ export default {
       return servePricingPage(domain);
     }
 
+    // Route: Request API / Contact Email Redirect
+    if (pathname === '/request-api' || pathname === '/contact' || pathname === '/request') {
+      return handleEmailRedirect();
+    }
+
     // Route: Curated Wallpapers Feed
     if (pathname === '/wallpapers') {
       return handleBingImagesRequest(request);
@@ -595,7 +600,10 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
     let resolvedName = fileName;
     let storageType = 'telegram';
 
-    // Route large files (> 20MB) to Cloudflare R2
+    // Storage Routing:
+    // Files <= 20MB are ALWAYS stored on Telegram Cloud Storage (Free tier & Premium keys alike).
+    // Even if the API key is Premium, if the file is <= 20MB it is uploaded to Telegram only.
+    // Cloudflare R2 is ONLY used when a Premium key uploads a file strictly larger than 20MB (> 20 * 1024 * 1024 bytes).
     if (fileBuffer.byteLength > 20 * 1024 * 1024) {
       if (!env.R2_BUCKET) {
         return new Response(JSON.stringify({
@@ -621,7 +629,7 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       fileId = r2Key;
       resolvedName = fileName;
     } else {
-      // <= 20MB: Store on Telegram Cloud Storage
+      // <= 20MB: Store on Telegram Cloud Storage ONLY (Even for Premium API keys)
       const { fileId: tgFileId, resolvedName: tgResolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
       fileId = tgFileId;
       resolvedName = tgResolvedName;
@@ -1425,6 +1433,58 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth, domain
 }
 
 // ==========================================
+// EMAIL REDIRECT (/request-api, /contact)
+// ==========================================
+function handleEmailRedirect() {
+  const email = 'dhyeyp254@gmail.com';
+  const subject = encodeURIComponent('Request for CommonThread Premium API Key');
+  const body = encodeURIComponent('Hi Dhyey,\n\nI would like to request a Premium Developer API key for my project.\n\nProject Name:\nExpected File Types:\nAverage File Size:\nEstimated Monthly Uploads:\n\nThanks!');
+  const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting to Email - CommonThread</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    window.location.href = "${mailtoUrl}";
+    setTimeout(function() {
+      window.location.href = "${gmailUrl}";
+    }, 700);
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
+    .card { background: #18181b; border: 1px solid #27272a; padding: 36px; border-radius: 24px; max-width: 460px; width: 100%; box-shadow: 0 16px 40px rgba(0,0,0,0.6); }
+    h1 { font-size: 22px; margin-bottom: 8px; color: #fff; font-weight: 700; }
+    p { font-size: 14px; color: #a1a1aa; line-height: 1.5; margin-bottom: 24px; }
+    .btn { display: block; padding: 13px 20px; border-radius: 12px; font-weight: 600; text-decoration: none; font-size: 13px; margin-bottom: 10px; transition: all 0.2s; }
+    .btn-primary { background: #f97316; color: #000; }
+    .btn-primary:hover { background: #ea580c; }
+    .btn-secondary { background: #27272a; color: #fff; border: 1px solid #3f3f46; }
+    .btn-secondary:hover { background: #3f3f46; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="font-size: 40px; margin-bottom: 12px;">✉️</div>
+    <h1>Redirecting to Email</h1>
+    <p>Opening your email composer to request your Developer API key from <strong>${email}</strong>...</p>
+    <a href="${mailtoUrl}" class="btn btn-primary">Open Default Email App</a>
+    <a href="${gmailUrl}" target="_blank" class="btn btn-secondary">Open in Gmail (Web Browser)</a>
+    <p style="font-size: 12px; color: #71717a; margin-top: 18px; margin-bottom: 0;">Direct Email: <code>${email}</code></p>
+  </div>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
+}
+
+// ==========================================
 // DEDICATED DEVELOPER API DOCUMENTATION (/docs)
 // ==========================================
 function serveDocumentationPage(domain) {
@@ -1488,7 +1548,7 @@ function serveDocumentationPage(domain) {
           </p>
         </div>
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full sm:w-auto">
-          <a href="mailto:dhyeyp254@gmail.com?subject=Request%20for%20CommonThread%20Premium%20API&body=Hi%20Dhyey,%0A%0AI%20would%20like%20to%20request%20a%20Premium%20Developer%20API%20key%20for%20my%20project.%0A%0AProject%20Name:%0AExpected%20File%20Types:%0AAverage%20File%20Size:%0AEstimated%20Monthly%20Uploads:%0A%0AThanks!" class="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20">
+          <a href="mailto:dhyeyp254@gmail.com?subject=Request%20for%20CommonThread%20Premium%20API&body=Hi%20Dhyey,%0A%0AI%20would%20like%20to%20request%20a%20Premium%20Developer%20API%20key%20for%20my%20project.%0A%0AProject%20Name:%0AExpected%20File%20Types:%0AAverage%20File%20Size:%0AEstimated%20Monthly%20Uploads:%0A%0AThanks!" onclick="redirectUserToEmail(event)" class="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20">
             <span class="iconify" data-icon="lucide:mail"></span>
             <span>Request Premium API Key</span>
           </a>
@@ -1718,6 +1778,28 @@ func main() {
       }
     }
 
+    function redirectUserToEmail(e, customSubject) {
+      if (e) e.preventDefault();
+      const email = 'dhyeyp254@gmail.com';
+      const subject = encodeURIComponent(customSubject || 'Request for CommonThread Premium API Key');
+      const body = encodeURIComponent('Hi Dhyey,\n\nI would like to request a Premium Developer API key for my project.\n\nProject Name:\nExpected File Types:\nAverage File Size:\nEstimated Monthly Uploads:\n\nThanks!');
+      const mailtoUrl = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
+      const gmailUrl = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + email + '&su=' + subject + '&body=' + body;
+
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(email).catch(() => {});
+      }
+      showToast('Redirecting to email (' + email + ')...');
+
+      // Attempt native mail client
+      window.location.href = mailtoUrl;
+
+      // Webmail fallback (opens web Gmail if mailto is not handled)
+      setTimeout(() => {
+        window.open(gmailUrl, '_blank');
+      }, 700);
+    }
+
     function showToast(msg) {
       const toast = document.getElementById('toast');
       toast.textContent = msg;
@@ -1884,7 +1966,7 @@ function servePricingPage(domain) {
             </li>
           </ul>
         </div>
-        <a href="mailto:dhyeyp254@gmail.com?subject=Request%20for%20CommonThread%20Premium%20API&body=Hi%20Dhyey,%0A%0AI%20would%20like%20to%20request%20a%20Premium%20Developer%20API%20key%20for%20my%20project.%0A%0AProject%20Name:%0AExpected%20File%20Types:%0AAverage%20File%20Size:%0AEstimated%20Monthly%20Uploads:%0A%0AThanks!" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-black font-bold text-xs text-center transition block shadow-lg shadow-orange-500/20">
+        <a href="mailto:dhyeyp254@gmail.com?subject=Request%20for%20CommonThread%20Premium%20API&body=Hi%20Dhyey,%0A%0AI%20would%20like%20to%20request%20a%20Premium%20Developer%20API%20key%20for%20my%20project.%0A%0AProject%20Name:%0AExpected%20File%20Types:%0AAverage%20File%20Size:%0AEstimated%20Monthly%20Uploads:%0A%0AThanks!" onclick="redirectUserToEmail(event, 'Request for CommonThread Premium API')" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-black font-bold text-xs text-center transition block shadow-lg shadow-orange-500/20">
           ✉️ Request Premium API Token
         </a>
       </div>
@@ -1930,7 +2012,7 @@ function servePricingPage(domain) {
             </li>
           </ul>
         </div>
-        <a href="mailto:dhyeyp254@gmail.com?subject=Enterprise%20Media%20Hosting%20Inquiry" class="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs text-center transition block">
+        <a href="mailto:dhyeyp254@gmail.com?subject=Enterprise%20Media%20Hosting%20Inquiry" onclick="redirectUserToEmail(event, 'Enterprise Media Hosting Inquiry')" class="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs text-center transition block">
           Contact Sales &rarr;
         </a>
       </div>
@@ -1959,7 +2041,7 @@ function servePricingPage(domain) {
             <tr>
               <td class="py-3.5 px-4 font-medium text-white">Storage Backend</td>
               <td class="py-3.5 px-4">Telegram Cloud</td>
-              <td class="py-3.5 px-4">Cloudflare R2</td>
+              <td class="py-3.5 px-4">Telegram (&le; 20MB) & Cloudflare R2 (&gt; 20MB)</td>
               <td class="py-3.5 px-4">Dedicated R2 Bucket</td>
             </tr>
             <tr>
@@ -2001,7 +2083,7 @@ function servePricingPage(domain) {
         <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-2">
           <h4 class="text-sm font-semibold text-white">How do I request a Premium API Token?</h4>
           <p class="text-xs text-zinc-400 leading-relaxed">
-            Click the <a href="mailto:dhyeyp254@gmail.com" class="text-orange-400 hover:underline">Request Premium API</a> button or email <code class="text-zinc-300">dhyeyp254@gmail.com</code> with your app details. We will provision your key right away.
+            Click the <a href="mailto:dhyeyp254@gmail.com" onclick="redirectUserToEmail(event)" class="text-orange-400 hover:underline">Request Premium API</a> button or email <code class="text-zinc-300">dhyeyp254@gmail.com</code> with your app details. We will provision your key right away.
           </p>
         </div>
         <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-2">
@@ -2027,8 +2109,44 @@ function servePricingPage(domain) {
   </main>
 
   <footer class="border-t border-zinc-800/80 bg-zinc-950 py-8 text-center text-xs text-zinc-500">
-    <p>CommonThread &bull; Universal Media Hosting &bull; Contact: <a href="mailto:dhyeyp254@gmail.com" class="text-zinc-400 hover:underline">dhyeyp254@gmail.com</a></p>
+    <p>CommonThread &bull; Universal Media Hosting &bull; Contact: <a href="mailto:dhyeyp254@gmail.com" onclick="redirectUserToEmail(event)" class="text-zinc-400 hover:underline">dhyeyp254@gmail.com</a></p>
   </footer>
+
+  <div id="toast" class="fixed bottom-6 right-6 px-4 py-2.5 rounded-xl bg-zinc-800 text-white text-xs font-medium border border-zinc-700 shadow-2xl opacity-0 pointer-events-none transition-all duration-300 z-50">
+    Notification
+  </div>
+
+  <script>
+    function redirectUserToEmail(e, customSubject) {
+      if (e) e.preventDefault();
+      const email = 'dhyeyp254@gmail.com';
+      const subject = encodeURIComponent(customSubject || 'Request for CommonThread Premium API Key');
+      const body = encodeURIComponent('Hi Dhyey,\n\nI would like to request a Premium Developer API key for my project.\n\nProject Name:\nExpected File Types:\nAverage File Size:\nEstimated Monthly Uploads:\n\nThanks!');
+      const mailtoUrl = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
+      const gmailUrl = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + email + '&su=' + subject + '&body=' + body;
+
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(email).catch(function() {});
+      }
+      showToast('Redirecting to email (' + email + ')...');
+
+      // Attempt native mail client
+      window.location.href = mailtoUrl;
+
+      // Webmail fallback
+      setTimeout(function() {
+        window.open(gmailUrl, '_blank');
+      }, 700);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(function() { toast.classList.add('opacity-0', 'pointer-events-none'); }, 2500);
+    }
+  </script>
 </body>
 </html>`;
 

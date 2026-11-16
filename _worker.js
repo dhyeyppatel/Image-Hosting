@@ -109,7 +109,7 @@ export default {
 
     // Route: Request API / Contact Email Redirect
     if (pathname === '/request-api' || pathname === '/contact' || pathname === '/request') {
-      return handleEmailRedirect();
+      return handleEmailRedirect(request);
     }
 
     // Route: Curated Wallpapers Feed
@@ -412,32 +412,64 @@ function base64ToUint8Array(base64Str) {
   return { bytes, mime };
 }
 
-async function uploadToTelegram(fileBlob, filename, mimeType, TG_BOT_TOKEN, TG_CHAT_ID) {
-  const uploadFormData = new FormData();
-  uploadFormData.append('chat_id', TG_CHAT_ID);
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-  let tgFileName = filename || 'file.bin';
-  if (mimeType.startsWith('image/gif')) {
-    const newFileName = tgFileName.replace(/\.gif$/i, '.jpeg');
-    const newFile = new File([fileBlob], newFileName, { type: 'image/jpeg' });
-    uploadFormData.append('document', newFile);
-    tgFileName = newFileName;
-  } else {
-    const file = new File([fileBlob], tgFileName, { type: mimeType });
-    uploadFormData.append('document', file);
+function buildTelegramCaption(metadata) {
+  if (!metadata) return '';
+  const lines = [];
+
+  const name = metadata.filename || metadata.name || 'file.bin';
+  lines.push(`📁 <b>File:</b> ${escapeHtml(name)}`);
+
+  if (metadata.size) {
+    const formatted = formatBytes(metadata.size);
+    lines.push(`📊 <b>Size:</b> ${formatted} (${metadata.size.toLocaleString()} bytes)`);
   }
 
-  const telegramResponse = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument`, {
-    method: 'POST',
-    body: uploadFormData
-  });
-
-  if (!telegramResponse.ok) {
-    const errorData = await telegramResponse.json().catch(() => ({}));
-    throw new Error(errorData.description || 'Upload to Telegram storage failed');
+  if (metadata.mimeType) {
+    lines.push(`🏷️ <b>Type:</b> <code>${escapeHtml(metadata.mimeType)}</code>`);
   }
 
-  const responseData = await telegramResponse.json();
+  if (metadata.source) {
+    lines.push(`🌐 <b>Source:</b> ${escapeHtml(metadata.source)}`);
+  }
+
+  if (metadata.authName) {
+    const tier = metadata.tier ? ` [${metadata.tier}]` : '';
+    lines.push(`🔑 <b>Auth:</b> ${escapeHtml(metadata.authName)}${tier}`);
+  }
+
+  const dateObj = metadata.timestamp ? new Date(metadata.timestamp) : new Date();
+  const utcStr = dateObj.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+  const istStr = dateObj.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+  lines.push(`⏱️ <b>Uploaded:</b> ${utcStr} (${istStr} IST)`);
+
+  if (metadata.url) {
+    lines.push(`🔗 <b>Direct Link:</b> ${metadata.url}`);
+  }
+  if (metadata.slug) {
+    lines.push(`🆔 <b>ID / Slug:</b> <code>${metadata.slug}</code>`);
+  }
+  if (metadata.deleteToken) {
+    lines.push(`🗑️ <b>Delete Token:</b> <code>${metadata.deleteToken}</code>`);
+  }
+
+  let caption = lines.join('\n');
+  if (caption.length > 1024) {
+    caption = caption.substring(0, 1020) + '...';
+  }
+  return caption;
+}
+
+function parseTelegramResponse(responseData, tgFileName) {
   let fileId;
   if (responseData.result.document) fileId = responseData.result.document.file_id;
   else if (responseData.result.video) fileId = responseData.result.video.file_id;
@@ -454,8 +486,56 @@ async function uploadToTelegram(fileBlob, filename, mimeType, TG_BOT_TOKEN, TG_C
   } else if (responseData.result.audio && responseData.result.audio.file_name) {
     resolvedName = responseData.result.audio.file_name;
   }
-
   return { fileId, resolvedName };
+}
+
+async function uploadToTelegram(fileBlob, filename, mimeType, TG_BOT_TOKEN, TG_CHAT_ID, metadata = null) {
+  const uploadFormData = new FormData();
+  uploadFormData.append('chat_id', TG_CHAT_ID);
+
+  let tgFileName = filename || 'file.bin';
+  if (mimeType.startsWith('image/gif')) {
+    const newFileName = tgFileName.replace(/\.gif$/i, '.jpeg');
+    const newFile = new File([fileBlob], newFileName, { type: 'image/jpeg' });
+    uploadFormData.append('document', newFile);
+    tgFileName = newFileName;
+  } else {
+    const file = new File([fileBlob], tgFileName, { type: mimeType });
+    uploadFormData.append('document', file);
+  }
+
+  const caption = buildTelegramCaption(metadata);
+  if (caption) {
+    uploadFormData.append('caption', caption);
+    uploadFormData.append('parse_mode', 'HTML');
+  }
+
+  const telegramResponse = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument`, {
+    method: 'POST',
+    body: uploadFormData
+  });
+
+  if (!telegramResponse.ok) {
+    const errorData = await telegramResponse.json().catch(() => ({}));
+    if (caption) {
+      // Retry without caption if Telegram rejected the caption
+      const retryFormData = new FormData();
+      retryFormData.append('chat_id', TG_CHAT_ID);
+      const retryFile = new File([fileBlob], tgFileName, { type: mimeType });
+      retryFormData.append('document', retryFile);
+      const retryRes = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument`, {
+        method: 'POST',
+        body: retryFormData
+      });
+      if (retryRes.ok) {
+        return parseTelegramResponse(await retryRes.json(), tgFileName);
+      }
+    }
+    throw new Error(errorData.description || 'Upload to Telegram storage failed');
+  }
+
+  const responseData = await telegramResponse.json();
+  return parseTelegramResponse(responseData, tgFileName);
 }
 
 async function insertMediaRecord(DATABASE, imageURL, fileId, originalFileName, fileSize, mimeType, timestamp, deleteToken, storageType = 'telegram') {
@@ -584,7 +664,7 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
     if (fileBuffer.byteLength > allowedLimitBytes) {
       const err = isPremium
         ? `File size (${formatBytes(fileBuffer.byteLength)}) exceeds your Premium plan limit of ${allowedLimitMB}MB.`
-        : `File size (${formatBytes(fileBuffer.byteLength)}) exceeds free 20MB limit. Upgrade to a Premium API token for large file uploads up to 500MB (contact dhyeyp254@gmail.com or view /pricing).`;
+        : `File size (${formatBytes(fileBuffer.byteLength)}) exceeds free 20MB limit. Upgrade to a Premium API token for large file uploads up to 500MB (contact dhyeyhosts@gmail.com or view /pricing).`;
       return new Response(JSON.stringify({ success: false, error: err }), {
         status: 413,
         headers: { 'Content-Type': 'application/json' }
@@ -595,6 +675,25 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       const ext = fileName.split('.').pop();
       fileName = customName.includes('.') ? customName : `${customName}.${ext}`;
     }
+
+    const ext = (fileName.split('.').pop() || 'bin').toLowerCase();
+    const slug = generateSlug();
+    const timestamp = Date.now();
+    const deleteToken = crypto.randomUUID();
+    const imageURL = `https://${domain}/${slug}.${ext}`;
+
+    const metadata = {
+      filename: fileName,
+      size: fileBuffer.byteLength,
+      mimeType: mimeType,
+      source: 'Developer API (POST /api/upload)',
+      authName: activeAuthCheck ? activeAuthCheck.name : 'Developer Token',
+      tier: isPremium ? '👑 Premium Tier (500MB)' : '⚡ Free Tier (20MB)',
+      url: imageURL,
+      slug: slug,
+      deleteToken: deleteToken,
+      timestamp: timestamp
+    };
 
     let fileId;
     let resolvedName = fileName;
@@ -608,7 +707,7 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       if (!env.R2_BUCKET) {
         return new Response(JSON.stringify({
           success: false,
-          error: 'Cloudflare R2 storage backend is currently being provisioned for files >20MB. Please contact dhyeyp254@gmail.com to activate R2 storage on your account.'
+          error: 'Cloudflare R2 storage backend is currently being provisioned for files >20MB. Please contact dhyeyhosts@gmail.com to activate R2 storage on your account.'
         }), {
           status: 503,
           headers: { 'Content-Type': 'application/json' }
@@ -623,23 +722,21 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
           contentType: mimeType
         },
         customMetadata: {
-          originalName: fileName
+          originalName: fileName,
+          uploadedAt: new Date(timestamp).toISOString(),
+          source: 'Developer API',
+          url: imageURL,
+          deleteToken: deleteToken
         }
       });
       fileId = r2Key;
       resolvedName = fileName;
     } else {
       // <= 20MB: Store on Telegram Cloud Storage ONLY (Even for Premium API keys)
-      const { fileId: tgFileId, resolvedName: tgResolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
+      const { fileId: tgFileId, resolvedName: tgResolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID, metadata);
       fileId = tgFileId;
-      resolvedName = tgResolvedName;
+      resolvedName = tgResolvedName || fileName;
     }
-
-    const ext = (resolvedName.split('.').pop() || fileName.split('.').pop() || 'bin').toLowerCase();
-    const slug = generateSlug();
-    const timestamp = Date.now();
-    const deleteToken = crypto.randomUUID();
-    const imageURL = `https://${domain}/${slug}.${ext}`;
 
     await insertMediaRecord(env.DATABASE, imageURL, fileId, resolvedName, fileBuffer.byteLength, mimeType, timestamp, deleteToken, storageType);
 
@@ -737,27 +834,41 @@ async function handleImgBBApiUpload(request, env, domain, TG_BOT_TOKEN, TG_CHAT_
       fileName = customName.includes('.') ? customName : `${customName}.${ext}`;
     }
 
-    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
-
-    const ext = (resolvedName.split('.').pop() || fileName.split('.').pop() || 'bin').toLowerCase();
+    const ext = (fileName.split('.').pop() || 'bin').toLowerCase();
     const slug = generateSlug();
     const timestamp = Date.now();
     const deleteToken = crypto.randomUUID();
     const imageURL = `https://${domain}/${slug}.${ext}`;
-    const nameWithoutExt = resolvedName.replace(/\.[^/.]+$/, '');
 
-    await insertMediaRecord(env.DATABASE, imageURL, fileId, resolvedName, fileBuffer.byteLength, mimeType, timestamp, deleteToken);
+    const metadata = {
+      filename: customName || fileName,
+      size: fileBuffer.byteLength,
+      mimeType: mimeType,
+      source: 'ImgBB v1 API (/api/1/upload)',
+      authName: authCheck ? authCheck.name : 'ImgBB Key',
+      tier: '⚡ Standard',
+      url: imageURL,
+      slug: slug,
+      deleteToken: deleteToken,
+      timestamp: timestamp
+    };
+
+    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID, metadata);
+    const finalResolvedName = resolvedName || customName || fileName;
+    const nameWithoutExt = finalResolvedName.replace(/\.[^/.]+$/, '');
+
+    await insertMediaRecord(env.DATABASE, imageURL, fileId, finalResolvedName, fileBuffer.byteLength, mimeType, timestamp, deleteToken);
 
     return new Response(JSON.stringify({
       data: {
         id: slug,
-        title: resolvedName,
+        title: finalResolvedName,
         url: imageURL,
         display_url: imageURL,
         size: fileBuffer.byteLength,
         time: Math.floor(timestamp / 1000),
         image: {
-          filename: resolvedName,
+          filename: finalResolvedName,
           name: nameWithoutExt,
           mime: mimeType,
           extension: ext,
@@ -991,21 +1102,35 @@ async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASS
     const originalFileName = file.name || 'upload.bin';
     const mimeType = file.type || detectMimeType(originalFileName);
 
-    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, originalFileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
-
-    const ext = (resolvedName.split('.').pop() || 'bin').toLowerCase();
+    const ext = (originalFileName.split('.').pop() || 'bin').toLowerCase();
     const slug = generateSlug();
     const timestamp = Date.now();
     const deleteToken = crypto.randomUUID();
     const imageURL = `https://${domain}/${slug}.${ext}`;
 
-    await insertMediaRecord(DATABASE, imageURL, fileId, resolvedName, file.size, mimeType, timestamp, deleteToken);
+    const metadata = {
+      filename: originalFileName,
+      size: file.size,
+      mimeType: mimeType,
+      source: 'Web Uploader (Browser GUI)',
+      authName: enableAuth ? USERNAME : 'Public Web',
+      tier: '⚡ Web Tier',
+      url: imageURL,
+      slug: slug,
+      deleteToken: deleteToken,
+      timestamp: timestamp
+    };
+
+    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, originalFileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID, metadata);
+    const finalResolvedName = resolvedName || originalFileName;
+
+    await insertMediaRecord(DATABASE, imageURL, fileId, finalResolvedName, file.size, mimeType, timestamp, deleteToken);
 
     const json = {
       success: true,
       data: imageURL,
       url: imageURL,
-      filename: resolvedName,
+      filename: finalResolvedName,
       size: file.size,
       size_formatted: formatBytes(file.size),
       uploaded_on: new Date(timestamp).toISOString(),
@@ -1069,21 +1194,35 @@ async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, P
       });
     }
 
-    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, contentType, TG_BOT_TOKEN, TG_CHAT_ID);
-
-    const ext = (resolvedName.split('.').pop() || fileName.split('.').pop() || 'bin').toLowerCase();
+    const ext = (fileName.split('.').pop() || 'bin').toLowerCase();
     const slug = generateSlug();
     const timestamp = Date.now();
     const deleteToken = crypto.randomUUID();
     const imageURL = `https://${domain}/${slug}.${ext}`;
 
-    await insertMediaRecord(DATABASE, imageURL, fileId, resolvedName, fileBuffer.byteLength, contentType, timestamp, deleteToken);
+    const metadata = {
+      filename: fileName,
+      size: fileBuffer.byteLength,
+      mimeType: contentType,
+      source: 'Remote URL Mirror (/hosturl)',
+      authName: enableAuth ? USERNAME : 'Public URL',
+      tier: '⚡ Standard',
+      url: imageURL,
+      slug: slug,
+      deleteToken: deleteToken,
+      timestamp: timestamp
+    };
+
+    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, contentType, TG_BOT_TOKEN, TG_CHAT_ID, metadata);
+    const finalResolvedName = resolvedName || fileName;
+
+    await insertMediaRecord(DATABASE, imageURL, fileId, finalResolvedName, fileBuffer.byteLength, contentType, timestamp, deleteToken);
 
     const json = {
       success: true,
       data: imageURL,
       url: imageURL,
-      filename: resolvedName,
+      filename: finalResolvedName,
       size: fileBuffer.byteLength,
       size_formatted: formatBytes(fileBuffer.byteLength),
       uploaded_on: new Date(timestamp).toISOString(),
@@ -1262,9 +1401,17 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth, domain
         <span class="font-bold text-lg tracking-tight">CommonThread</span>
       </a>
       <div class="flex items-center gap-3">
-        <a href="/docs" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-orange-500/10">
-          <span class="iconify" data-icon="lucide:terminal"></span>
-          <span>Developer API Docs</span>
+        <a href="/pricing" class="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition flex items-center gap-1.5">
+          <span class="iconify text-orange-400" data-icon="lucide:credit-card"></span>
+          <span>Pricing</span>
+        </a>
+        <a href="/docs" class="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition flex items-center gap-1.5">
+          <span class="iconify text-orange-400" data-icon="lucide:terminal"></span>
+          <span>API Docs</span>
+        </a>
+        <a href="/request-api" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-orange-500/10">
+          <span class="iconify" data-icon="lucide:mail"></span>
+          <span>Request API</span>
         </a>
         <a href="/admin" class="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition">
           Admin
@@ -1342,11 +1489,19 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth, domain
           <span class="iconify text-orange-400" data-icon="lucide:terminal"></span>
           <span>Upload directly from your app or project</span>
         </h3>
-        <p class="text-xs text-zinc-400">Use our simple REST API <code class="text-zinc-300 mono bg-zinc-800 px-1.5 py-0.5 rounded">POST /api/upload</code> in Python, JS, cURL, etc.</p>
+        <p class="text-xs text-zinc-400">Use our simple REST API <code class="text-zinc-300 mono bg-zinc-800 px-1.5 py-0.5 rounded">POST /api/upload</code> &bull; Free (20MB) or Premium (500MB)</p>
       </div>
-      <a href="/docs" class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition shrink-0">
-        Read API Docs &rarr;
-      </a>
+      <div class="flex items-center gap-2 shrink-0">
+        <a href="/pricing" class="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 font-semibold text-xs transition">
+          Pricing
+        </a>
+        <a href="/docs" class="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 font-semibold text-xs transition">
+          Docs
+        </a>
+        <a href="/request-api" class="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-semibold text-xs transition">
+          Request API Key &rarr;
+        </a>
+      </div>
     </div>
   </main>
 
@@ -1435,10 +1590,14 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth, domain
 // ==========================================
 // EMAIL REDIRECT (/request-api, /contact)
 // ==========================================
-function handleEmailRedirect() {
-  const email = 'dhyeyp254@gmail.com';
-  const subject = encodeURIComponent('Request for CommonThread Premium API Key');
-  const body = encodeURIComponent('Hi Dhyey,\n\nI would like to request a Premium Developer API key for my project.\n\nProject Name:\nExpected File Types:\nAverage File Size:\nEstimated Monthly Uploads:\n\nThanks!');
+function handleEmailRedirect(request) {
+  const url = request ? new URL(request.url) : { pathname: '' };
+  const isContact = (url.pathname || '').includes('/contact');
+  const email = 'dhyeyhosts@gmail.com';
+  const subject = encodeURIComponent(isContact ? 'CommonThread Media Hosting Inquiry / Enterprise' : 'Request for CommonThread Premium API Key');
+  const body = encodeURIComponent(isContact
+    ? 'Hi Dhyey,\n\nI have an inquiry regarding CommonThread media hosting / enterprise plans:\n\nProject / Company Name:\nEstimated Volume:\nSpecial Requirements:\n\nThanks!'
+    : 'Hi Dhyey,\n\nI would like to request a Premium Developer API key for my project.\n\nProject Name:\nExpected File Types:\nAverage File Size:\nEstimated Monthly Uploads:\n\nThanks!');
   const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
   const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`;
 
@@ -1517,6 +1676,10 @@ function serveDocumentationPage(domain) {
           <span class="iconify" data-icon="lucide:credit-card"></span>
           <span>Pricing & Plans</span>
         </a>
+        <a href="/request-api" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-orange-500/10">
+          <span class="iconify" data-icon="lucide:mail"></span>
+          <span>Request API Key</span>
+        </a>
         <a href="/" class="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition">
           Web Uploader &rarr;
         </a>
@@ -1548,9 +1711,9 @@ function serveDocumentationPage(domain) {
           </p>
         </div>
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full sm:w-auto">
-          <a href="mailto:dhyeyp254@gmail.com?subject=Request%20for%20CommonThread%20Premium%20API&body=Hi%20Dhyey,%0A%0AI%20would%20like%20to%20request%20a%20Premium%20Developer%20API%20key%20for%20my%20project.%0A%0AProject%20Name:%0AExpected%20File%20Types:%0AAverage%20File%20Size:%0AEstimated%20Monthly%20Uploads:%0A%0AThanks!" onclick="redirectUserToEmail(event)" class="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20">
+          <a href="/request-api" class="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20">
             <span class="iconify" data-icon="lucide:mail"></span>
-            <span>Request Premium API Key</span>
+            <span>Request Premium API Key &rarr;</span>
           </a>
           <a href="/pricing" class="px-4 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 font-semibold text-xs transition text-center flex items-center justify-center gap-1.5">
             <span class="iconify" data-icon="lucide:tag"></span>
@@ -1780,7 +1943,7 @@ func main() {
 
     function redirectUserToEmail(e, customSubject) {
       if (e) e.preventDefault();
-      const email = 'dhyeyp254@gmail.com';
+      const email = 'dhyeyhosts@gmail.com';
       const subject = encodeURIComponent(customSubject || 'Request for CommonThread Premium API Key');
       const body = encodeURIComponent('Hi Dhyey,\n\nI would like to request a Premium Developer API key for my project.\n\nProject Name:\nExpected File Types:\nAverage File Size:\nEstimated Monthly Uploads:\n\nThanks!');
       const mailtoUrl = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
@@ -1849,8 +2012,12 @@ function servePricingPage(domain) {
           <span class="iconify" data-icon="lucide:terminal"></span>
           <span>API Docs</span>
         </a>
-        <a href="/" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-orange-500/10">
-          <span>Web Uploader &rarr;</span>
+        <a href="/request-api" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-orange-500/10">
+          <span class="iconify" data-icon="lucide:mail"></span>
+          <span>Request API Key</span>
+        </a>
+        <a href="/" class="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition">
+          Web Uploader &rarr;
         </a>
       </div>
     </div>
@@ -1966,8 +2133,8 @@ function servePricingPage(domain) {
             </li>
           </ul>
         </div>
-        <a href="mailto:dhyeyp254@gmail.com?subject=Request%20for%20CommonThread%20Premium%20API&body=Hi%20Dhyey,%0A%0AI%20would%20like%20to%20request%20a%20Premium%20Developer%20API%20key%20for%20my%20project.%0A%0AProject%20Name:%0AExpected%20File%20Types:%0AAverage%20File%20Size:%0AEstimated%20Monthly%20Uploads:%0A%0AThanks!" onclick="redirectUserToEmail(event, 'Request for CommonThread Premium API')" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-black font-bold text-xs text-center transition block shadow-lg shadow-orange-500/20">
-          ✉️ Request Premium API Token
+        <a href="/request-api" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-black font-bold text-xs text-center transition block shadow-lg shadow-orange-500/20">
+          ✉️ Request Premium API Token &rarr;
         </a>
       </div>
 
@@ -2012,7 +2179,7 @@ function servePricingPage(domain) {
             </li>
           </ul>
         </div>
-        <a href="mailto:dhyeyp254@gmail.com?subject=Enterprise%20Media%20Hosting%20Inquiry" onclick="redirectUserToEmail(event, 'Enterprise Media Hosting Inquiry')" class="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs text-center transition block">
+        <a href="/contact" class="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs text-center transition block">
           Contact Sales &rarr;
         </a>
       </div>
@@ -2083,7 +2250,7 @@ function servePricingPage(domain) {
         <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-2">
           <h4 class="text-sm font-semibold text-white">How do I request a Premium API Token?</h4>
           <p class="text-xs text-zinc-400 leading-relaxed">
-            Click the <a href="mailto:dhyeyp254@gmail.com" onclick="redirectUserToEmail(event)" class="text-orange-400 hover:underline">Request Premium API</a> button or email <code class="text-zinc-300">dhyeyp254@gmail.com</code> with your app details. We will provision your key right away.
+            Click the <a href="/request-api" class="text-orange-400 hover:underline font-semibold">Request Premium API</a> button or email <code class="text-zinc-300">dhyeyhosts@gmail.com</code> with your app details. We will provision your key right away.
           </p>
         </div>
         <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-2">
@@ -2109,7 +2276,7 @@ function servePricingPage(domain) {
   </main>
 
   <footer class="border-t border-zinc-800/80 bg-zinc-950 py-8 text-center text-xs text-zinc-500">
-    <p>CommonThread &bull; Universal Media Hosting &bull; Contact: <a href="mailto:dhyeyp254@gmail.com" onclick="redirectUserToEmail(event)" class="text-zinc-400 hover:underline">dhyeyp254@gmail.com</a></p>
+    <p>CommonThread &bull; Universal Media Hosting &bull; Contact: <a href="/contact" class="text-zinc-400 hover:underline">dhyeyhosts@gmail.com</a></p>
   </footer>
 
   <div id="toast" class="fixed bottom-6 right-6 px-4 py-2.5 rounded-xl bg-zinc-800 text-white text-xs font-medium border border-zinc-700 shadow-2xl opacity-0 pointer-events-none transition-all duration-300 z-50">
@@ -2119,7 +2286,7 @@ function servePricingPage(domain) {
   <script>
     function redirectUserToEmail(e, customSubject) {
       if (e) e.preventDefault();
-      const email = 'dhyeyp254@gmail.com';
+      const email = 'dhyeyhosts@gmail.com';
       const subject = encodeURIComponent(customSubject || 'Request for CommonThread Premium API Key');
       const body = encodeURIComponent('Hi Dhyey,\n\nI would like to request a Premium Developer API key for my project.\n\nProject Name:\nExpected File Types:\nAverage File Size:\nEstimated Monthly Uploads:\n\nThanks!');
       const mailtoUrl = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
@@ -3171,6 +3338,7 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
           <button id="tab-tokens-btn" class="nav-tab" onclick="switchAdminTab('tokens')">🔑 Developer API Tokens</button>
           <a href="/pricing" target="_blank" class="nav-link">💳 Pricing & Plans &rarr;</a>
           <a href="/docs" target="_blank" class="nav-link">📖 API Docs &rarr;</a>
+          <a href="/request-api" target="_blank" class="nav-link">✉️ Request Key &rarr;</a>
           <a href="/" target="_blank" class="nav-link">🌐 Web Uploader &rarr;</a>
         </div>
       </div>

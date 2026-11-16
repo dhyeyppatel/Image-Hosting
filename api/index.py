@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import requests
 import os
 import base64
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -79,18 +80,6 @@ def webhook():
             send_message(chat_id, welcome_text, reply_markup=reply_markup)
         return "OK", 200
 
-    # We need to ensure the file is also sent to the admin channel (TG_CHAT_ID)
-    if TG_CHAT_ID:
-        try:
-            forward_res = requests.post(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/forwardMessage", json={
-                "chat_id": TG_CHAT_ID,
-                "from_chat_id": chat_id,
-                "message_id": message["message_id"]
-            })
-            forward_data = forward_res.json()
-        except Exception:
-            pass
-            
     # Send processing message
     processing_msg = send_message(chat_id, "⏳ <b>Processing your upload...</b>")
 
@@ -120,6 +109,37 @@ def webhook():
         if res.status_code == 200:
             data = res.json()
             hosted_url = data.get("url")
+
+            # Store copy in Telegram storage channel with full metadata caption
+            if TG_CHAT_ID:
+                try:
+                    user_info = message.get("from", {})
+                    user_name = f"@{user_info.get('username')}" if user_info.get("username") else user_info.get("first_name", "Telegram User")
+                    now_utc = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+                    caption_text = (
+                        f"📁 <b>File:</b> {file_name}\n"
+                        f"🏷️ <b>Type:</b> <code>{media_type}</code>\n"
+                        f"🌐 <b>Source:</b> Telegram Bot (@Imagehostssbot)\n"
+                        f"👤 <b>Uploaded By:</b> {user_name} (ID: <code>{chat_id}</code>)\n"
+                        f"⏱️ <b>Uploaded:</b> {now_utc}\n"
+                        f"🔗 <b>Direct Link:</b> {hosted_url}\n"
+                        f"🆔 <b>File ID:</b> <code>{file_id}</code>"
+                    )
+                    copy_res = requests.post(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/copyMessage", json={
+                        "chat_id": TG_CHAT_ID,
+                        "from_chat_id": chat_id,
+                        "message_id": message["message_id"],
+                        "caption": caption_text,
+                        "parse_mode": "HTML"
+                    })
+                    if not copy_res.ok:
+                        requests.post(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/forwardMessage", json={
+                            "chat_id": TG_CHAT_ID,
+                            "from_chat_id": chat_id,
+                            "message_id": message["message_id"]
+                        })
+                except Exception:
+                    pass
             
             text = (
                 "✅ <b>Upload Successful!</b>\n\n"

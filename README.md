@@ -111,7 +111,7 @@ You can issue tokens to other developers so they can use your platform in their 
 | :--- | :--- | :--- | :--- |
 | **Price** | **$0 / forever** | **$9 / month** | **$29 / month** |
 | **Max Single File** | **20 MB** | **500 MB** | **2 GB+** |
-| **Storage Backend** | Telegram Cloud Storage | **Cloudflare R2** (S3-compatible) | Dedicated Cloudflare R2 Bucket |
+| **Storage Backend** | Telegram Cloud Storage | **Telegram** (&le; 20MB) & **Cloudflare R2** (&gt; 20MB) | Dedicated Cloudflare R2 Bucket |
 | **Bandwidth / Egress** | Unlimited ($0) | Unlimited ($0) | Unlimited ($0) |
 | **Seeking / Streaming** | Standard Range | High-Speed Native Edge Streaming | Dedicated Edge Route |
 | **Token Format** | `ct_dev_...` | Priority `ct_dev_...` | Multi-token RBAC |

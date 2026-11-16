@@ -64,6 +64,14 @@
       "destination": "https://media-hosting.dhyeyp254.workers.dev/pricing$1"
     },
     {
+      "source": "/request-api(.*)",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/request-api$1"
+    },
+    {
+      "source": "/contact(.*)",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/contact$1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.py"
     }

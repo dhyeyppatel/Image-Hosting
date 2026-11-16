@@ -11,7 +11,7 @@
 
 <br/>
 
-[**Web Uploader**](https://media-hosting.dhyeyp254.workers.dev/) • [**Developer API Docs**](https://media-hosting.dhyeyp254.workers.dev/docs) • [**ShareX Config**](https://media-hosting.dhyeyp254.workers.dev/api/sharex) • [**Telegram Bot**](https://t.me/Imagehostssbot) • [**Deployment Guide**](#-deployment-guide) • [**Developer API Reference**](#-developer-api-reference)
+[**Web Uploader**](https://media-hosting.dhyeyp254.workers.dev/) • [**Pricing & Plans**](https://media-hosting.dhyeyp254.workers.dev/pricing) • [**Developer API Docs**](https://media-hosting.dhyeyp254.workers.dev/docs) • [**ShareX Config**](https://media-hosting.dhyeyp254.workers.dev/api/sharex) • [**Telegram Bot**](https://t.me/Imagehostssbot) • [**Deployment Guide**](#-deployment-guide) • [**Developer API Reference**](#-developer-api-reference)
 
 </div>
 
@@ -89,19 +89,35 @@ Upload any file from your app or project to get a direct hosted URL.
 
 ---
 
-### 🔑 Issuing Developer API Tokens
+### 🔑 Issuing & Managing Developer API Tokens
 
 You can issue tokens to other developers so they can use your platform in their apps, bots, or websites:
 
 1. Go to your Admin Dashboard (`https://<YOUR_DOMAIN>/admin`).
 2. Click on the **"🔑 Developer API Tokens"** tab.
-3. Enter the developer or app name (e.g. `Client Mobile App`, `Discord Bot`) and click **"Generate API Token"**.
-4. Copy the generated key (e.g. `ct_dev_...`) and hand it to the developer!
-5. Developers pass this token with their upload requests using either:
+3. Enter the developer or app name (e.g. `Client Mobile App`, `Discord Bot`), choose the tier (**Free 20MB** or **Premium 500MB**), and click **"Generate API Token"**.
+4. Copy the generated key (e.g. `ct_dev_...`) and hand it to the developer! Developers pass this token with their requests using:
    - Header: `X-API-Key: YOUR_TOKEN`
    - Header: `Authorization: Bearer YOUR_TOKEN`
    - Query: `?key=YOUR_TOKEN`
    - Form-data: `key=YOUR_TOKEN`
+5. **One-Click Tier Toggle**: In the Active Tokens table, click on the **Plan Tier badge** for any token to switch it instantly between **Free** and **Premium** at any time.
+
+---
+
+### 💳 Plans & Storage Tiers
+
+| Feature | ⚡ Free Tier | 👑 Developer Pro (Premium) | 🏢 Enterprise |
+| :--- | :--- | :--- | :--- |
+| **Price** | **$0 / forever** | **$9 / month** | **$29 / month** |
+| **Max Single File** | **20 MB** | **500 MB** | **2 GB+** |
+| **Storage Backend** | Telegram Cloud Storage | **Cloudflare R2** (S3-compatible) | Dedicated Cloudflare R2 Bucket |
+| **Bandwidth / Egress** | Unlimited ($0) | Unlimited ($0) | Unlimited ($0) |
+| **Seeking / Streaming** | Standard Range | High-Speed Native Edge Streaming | Dedicated Edge Route |
+| **Token Format** | `ct_dev_...` | Priority `ct_dev_...` | Multi-token RBAC |
+| **How to Request** | Instant via `/admin` | Email [dhyeyp254@gmail.com](mailto:dhyeyp254@gmail.com) | Contact Sales |
+
+*View the full interactive comparison at [`/pricing`](https://media-hosting.dhyeyp254.workers.dev/pricing).*
 
 ---
 

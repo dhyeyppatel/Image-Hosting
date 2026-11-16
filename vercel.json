@@ -60,6 +60,10 @@
       "destination": "https://media-hosting.dhyeyp254.workers.dev/docs$1"
     },
     {
+      "source": "/pricing(.*)",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/pricing$1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.py"
     }

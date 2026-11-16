@@ -102,6 +102,11 @@ export default {
       return serveDocumentationPage(domain);
     }
 
+    // Route: Pricing Page
+    if (pathname === '/pricing') {
+      return servePricingPage(domain);
+    }
+
     // Route: Curated Wallpapers Feed
     if (pathname === '/wallpapers') {
       return handleBingImagesRequest(request);
@@ -119,6 +124,8 @@ export default {
         return await handleAdminListKeys(DATABASE, request, USERNAME, PASSWORD);
       } else if (request.method === 'POST') {
         return await handleAdminCreateKey(DATABASE, request, USERNAME, PASSWORD);
+      } else if (request.method === 'PATCH') {
+        return await handleAdminUpdateKey(DATABASE, request, USERNAME, PASSWORD);
       } else if (request.method === 'DELETE') {
         return await handleAdminDeleteKey(DATABASE, request, USERNAME, PASSWORD);
       }
@@ -129,7 +136,7 @@ export default {
     }
 
     // Default: Direct Media Delivery & Streaming
-    return await handleImageRequest(request, DATABASE, TG_BOT_TOKEN);
+    return await handleImageRequest(request, env);
   }
 };
 
@@ -232,12 +239,25 @@ async function ensureApiKeysTable(DATABASE) {
         name TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         active INTEGER DEFAULT 1,
-        uploads_count INTEGER DEFAULT 0
+        uploads_count INTEGER DEFAULT 0,
+        is_premium INTEGER DEFAULT 0,
+        max_size_mb INTEGER DEFAULT 20
       )
     `).run();
   } catch (err) {
-    // Graceful fallback if table exists or DB is read-only
+    // Graceful fallback if table exists
   }
+
+  // Run column migrations safely on existing tables
+  try {
+    await DATABASE.prepare('ALTER TABLE api_keys ADD COLUMN is_premium INTEGER DEFAULT 0').run();
+  } catch (err) {}
+  try {
+    await DATABASE.prepare('ALTER TABLE api_keys ADD COLUMN max_size_mb INTEGER DEFAULT 20').run();
+  } catch (err) {}
+  try {
+    await DATABASE.prepare("ALTER TABLE media ADD COLUMN storage_type TEXT DEFAULT 'telegram'").run();
+  } catch (err) {}
 }
 
 async function validateApiKey(request, env, extraKey = null) {
@@ -272,7 +292,13 @@ async function validateApiKey(request, env, extraKey = null) {
 
   // 3. Match against environment keys
   if (candidate && envKeys.has(candidate)) {
-    return { valid: true, name: 'Environment Key', key: candidate };
+    return {
+      valid: true,
+      name: 'Environment Key',
+      key: candidate,
+      is_premium: 0,
+      max_size_mb: env.MAX_SIZE_MB ? parseInt(env.MAX_SIZE_MB, 10) : 20
+    };
   }
 
   // 4. Match against D1 database keys
@@ -281,11 +307,19 @@ async function validateApiKey(request, env, extraKey = null) {
     try {
       await ensureApiKeysTable(DATABASE);
       if (candidate) {
-        const row = await DATABASE.prepare('SELECT key, name, active FROM api_keys WHERE key = ?').bind(candidate).first();
+        const row = await DATABASE.prepare('SELECT key, name, active, is_premium, max_size_mb FROM api_keys WHERE key = ?').bind(candidate).first();
         if (row && row.active === 1) {
           // Asynchronously increment upload counter
           DATABASE.prepare('UPDATE api_keys SET uploads_count = uploads_count + 1 WHERE key = ?').bind(candidate).run().catch(() => {});
-          return { valid: true, name: row.name, key: candidate };
+          const isPremium = row.is_premium === 1;
+          const maxSizeMb = isPremium ? (row.max_size_mb && row.max_size_mb > 20 ? row.max_size_mb : 500) : 20;
+          return {
+            valid: true,
+            name: row.name,
+            key: candidate,
+            is_premium: isPremium ? 1 : 0,
+            max_size_mb: maxSizeMb
+          };
         }
       }
       // Check if any active keys exist in D1
@@ -300,7 +334,13 @@ async function validateApiKey(request, env, extraKey = null) {
 
   // 5. Open access check: if NO keys are configured in env and NO keys in D1, allow upload
   if (envKeys.size === 0 && !d1HasKeys) {
-    return { valid: true, name: 'Open Access (No keys configured)', key: null };
+    return {
+      valid: true,
+      name: 'Open Access (No keys configured)',
+      key: null,
+      is_premium: 0,
+      max_size_mb: 20
+    };
   }
 
   // 6. If keys are configured, reject invalid or missing key
@@ -413,19 +453,27 @@ async function uploadToTelegram(fileBlob, filename, mimeType, TG_BOT_TOKEN, TG_C
   return { fileId, resolvedName };
 }
 
-async function insertMediaRecord(DATABASE, imageURL, fileId, originalFileName, fileSize, mimeType, timestamp, deleteToken) {
+async function insertMediaRecord(DATABASE, imageURL, fileId, originalFileName, fileSize, mimeType, timestamp, deleteToken, storageType = 'telegram') {
   try {
     await DATABASE.prepare(`
-      INSERT INTO media (url, fileId, filename, file_size, mime_type, created_at, delete_token)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(url) DO UPDATE SET fileId = excluded.fileId, filename = excluded.filename
-    `).bind(imageURL, fileId, originalFileName, fileSize, mimeType, timestamp, deleteToken).run();
+      INSERT INTO media (url, fileId, filename, file_size, mime_type, created_at, delete_token, storage_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(url) DO UPDATE SET fileId = excluded.fileId, filename = excluded.filename, storage_type = excluded.storage_type
+    `).bind(imageURL, fileId, originalFileName, fileSize, mimeType, timestamp, deleteToken, storageType).run();
   } catch (err) {
-    await DATABASE.prepare(`
-      INSERT INTO media (url, fileId, filename)
-      VALUES (?, ?, ?)
-      ON CONFLICT(url) DO UPDATE SET fileId = excluded.fileId, filename = excluded.filename
-    `).bind(imageURL, fileId, originalFileName).run();
+    try {
+      await DATABASE.prepare(`
+        INSERT INTO media (url, fileId, filename, file_size, mime_type, created_at, delete_token)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(url) DO UPDATE SET fileId = excluded.fileId, filename = excluded.filename
+      `).bind(imageURL, fileId, originalFileName, fileSize, mimeType, timestamp, deleteToken).run();
+    } catch {
+      await DATABASE.prepare(`
+        INSERT INTO media (url, fileId, filename)
+        VALUES (?, ?, ?)
+        ON CONFLICT(url) DO UPDATE SET fileId = excluded.fileId, filename = excluded.filename
+      `).bind(imageURL, fileId, originalFileName).run();
+    }
   }
 }
 
@@ -439,6 +487,7 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
     let mimeType = 'application/octet-stream';
     let customName = null;
     let bodyKey = null;
+    let activeAuthCheck = null;
 
     const contentType = request.headers.get('content-type') || '';
 
@@ -448,11 +497,11 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       const file = formData.get('file') || formData.get('image');
       customName = formData.get('name');
 
-      const authCheck = await validateApiKey(request, env, bodyKey);
-      if (!authCheck.valid) {
+      activeAuthCheck = await validateApiKey(request, env, bodyKey);
+      if (!activeAuthCheck.valid) {
         return new Response(JSON.stringify({
           success: false,
-          error: authCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
+          error: activeAuthCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
         }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
 
@@ -486,11 +535,11 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       const json = await request.json();
       bodyKey = json.key || json.api_key || json.token;
 
-      const authCheck = await validateApiKey(request, env, bodyKey);
-      if (!authCheck.valid) {
+      activeAuthCheck = await validateApiKey(request, env, bodyKey);
+      if (!activeAuthCheck.valid) {
         return new Response(JSON.stringify({
           success: false,
-          error: authCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
+          error: activeAuthCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
         }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
 
@@ -511,11 +560,11 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
         mimeType = decoded.mime;
       }
     } else {
-      const authCheck = await validateApiKey(request, env);
-      if (!authCheck.valid) {
+      activeAuthCheck = await validateApiKey(request, env);
+      if (!activeAuthCheck.valid) {
         return new Response(JSON.stringify({
           success: false,
-          error: authCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
+          error: activeAuthCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
         }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       }
       fileBuffer = await request.arrayBuffer();
@@ -523,8 +572,15 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       mimeType = contentType || 'application/octet-stream';
     }
 
-    if (fileBuffer.byteLength > maxSize) {
-      return new Response(JSON.stringify({ success: false, error: `File size exceeds ${maxSize / (1024 * 1024)}MB limit` }), {
+    const isPremium = activeAuthCheck && activeAuthCheck.is_premium === 1;
+    const allowedLimitMB = isPremium ? (activeAuthCheck.max_size_mb || 500) : 20;
+    const allowedLimitBytes = allowedLimitMB * 1024 * 1024;
+
+    if (fileBuffer.byteLength > allowedLimitBytes) {
+      const err = isPremium
+        ? `File size (${formatBytes(fileBuffer.byteLength)}) exceeds your Premium plan limit of ${allowedLimitMB}MB.`
+        : `File size (${formatBytes(fileBuffer.byteLength)}) exceeds free 20MB limit. Upgrade to a Premium API token for large file uploads up to 500MB (contact dhyeyp254@gmail.com or view /pricing).`;
+      return new Response(JSON.stringify({ success: false, error: err }), {
         status: 413,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -535,7 +591,41 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       fileName = customName.includes('.') ? customName : `${customName}.${ext}`;
     }
 
-    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
+    let fileId;
+    let resolvedName = fileName;
+    let storageType = 'telegram';
+
+    // Route large files (> 20MB) to Cloudflare R2
+    if (fileBuffer.byteLength > 20 * 1024 * 1024) {
+      if (!env.R2_BUCKET) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Cloudflare R2 storage backend is currently being provisioned for files >20MB. Please contact dhyeyp254@gmail.com to activate R2 storage on your account.'
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      storageType = 'r2';
+      const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const r2Key = `r2_${Date.now()}_${generateSlug()}_${cleanFileName}`;
+      await env.R2_BUCKET.put(r2Key, fileBuffer, {
+        httpMetadata: {
+          contentType: mimeType
+        },
+        customMetadata: {
+          originalName: fileName
+        }
+      });
+      fileId = r2Key;
+      resolvedName = fileName;
+    } else {
+      // <= 20MB: Store on Telegram Cloud Storage
+      const { fileId: tgFileId, resolvedName: tgResolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
+      fileId = tgFileId;
+      resolvedName = tgResolvedName;
+    }
 
     const ext = (resolvedName.split('.').pop() || fileName.split('.').pop() || 'bin').toLowerCase();
     const slug = generateSlug();
@@ -543,7 +633,7 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
     const deleteToken = crypto.randomUUID();
     const imageURL = `https://${domain}/${slug}.${ext}`;
 
-    await insertMediaRecord(env.DATABASE, imageURL, fileId, resolvedName, fileBuffer.byteLength, mimeType, timestamp, deleteToken);
+    await insertMediaRecord(env.DATABASE, imageURL, fileId, resolvedName, fileBuffer.byteLength, mimeType, timestamp, deleteToken, storageType);
 
     // Direct developer response
     return new Response(JSON.stringify({
@@ -553,6 +643,8 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       size: fileBuffer.byteLength,
       size_formatted: formatBytes(fileBuffer.byteLength),
       mime_type: mimeType,
+      storage: storageType,
+      tier: isPremium ? 'premium' : 'free',
       uploaded_at: new Date(timestamp).toISOString()
     }), {
       status: 200,
@@ -999,7 +1091,11 @@ async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, P
 // ==========================================
 // MEDIA RETRIEVAL & STREAMING (RANGE SUPPORT)
 // ==========================================
-async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
+async function handleImageRequest(request, env) {
+  const DATABASE = env.DATABASE;
+  const TG_BOT_TOKEN = env.TG_BOT_TOKEN;
+  const R2_BUCKET = env.R2_BUCKET;
+
   const urlObj = new URL(request.url);
   const cleanUrl = `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`;
   const cache = caches.default;
@@ -1012,12 +1108,22 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
     if (cachedResponse) return cachedResponse;
   }
 
-  let result = await DATABASE.prepare('SELECT fileId, filename FROM media WHERE url = ?').bind(cleanUrl).first();
+  let result = null;
+  try {
+    result = await DATABASE.prepare('SELECT fileId, filename, storage_type FROM media WHERE url = ?').bind(cleanUrl).first();
+  } catch {
+    result = await DATABASE.prepare('SELECT fileId, filename FROM media WHERE url = ?').bind(cleanUrl).first();
+  }
 
   if (!result) {
     const slug = urlObj.pathname.split('/').pop().split('.')[0];
-    result = await DATABASE.prepare('SELECT fileId, filename FROM media WHERE url LIKE ? OR url LIKE ?')
-      .bind(`%/${slug}`, `%/${slug}.%`).first();
+    try {
+      result = await DATABASE.prepare('SELECT fileId, filename, storage_type FROM media WHERE url LIKE ? OR url LIKE ?')
+        .bind(`%/${slug}`, `%/${slug}.%`).first();
+    } catch {
+      result = await DATABASE.prepare('SELECT fileId, filename FROM media WHERE url LIKE ? OR url LIKE ?')
+        .bind(`%/${slug}`, `%/${slug}.%`).first();
+    }
   }
 
   if (!result) {
@@ -1031,7 +1137,33 @@ async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
   }
 
   const fileId = result.fileId;
-  let filePath;
+  const filename = result.filename || cleanUrl.split('/').pop();
+  const ext = filename.split('.').pop().toLowerCase();
+  const mimeType = detectMimeType(filename);
+  const disposition = EXECUTABLE_EXTENSIONS.has(ext) ? 'attachment' : 'inline';
+
+  // Handle Cloudflare R2 files
+  if (result.storage_type === 'r2' || (R2_BUCKET && fileId && fileId.startsWith('r2_'))) {
+    if (!R2_BUCKET) {
+      return new Response('Cloudflare R2 storage backend not bound', { status: 503 });
+    }
+    const r2Obj = await R2_BUCKET.get(fileId, {
+      range: request.headers,
+      onlyIf: request.headers
+    });
+    if (!r2Obj) return new Response('File Not Found in R2', { status: 404 });
+    const headers = new Headers();
+    r2Obj.writeHttpMetadata(headers);
+    headers.set('etag', r2Obj.httpEtag);
+    if (!headers.get('content-type')) headers.set('content-type', mimeType);
+    headers.set('Content-Disposition', `${disposition}; filename="${filename}"`);
+    headers.set('Access-Control-Allow-Origin', '*');
+    headers.set('Accept-Ranges', 'bytes');
+    return new Response(r2Obj.body, {
+      status: r2Obj.body ? (rangeHeader ? 206 : 200) : 304,
+      headers
+    });
+  }
   let attempts = 0;
   while (attempts < 3) {
     const getFilePath = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/getFile?file_id=${fileId}`);
@@ -1320,13 +1452,19 @@ function serveDocumentationPage(domain) {
         </div>
         <span class="font-bold text-lg tracking-tight">CommonThread <span class="text-orange-400 text-sm font-normal">Developer API</span></span>
       </a>
-      <a href="/" class="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition">
-        Web Uploader &rarr;
-      </a>
+      <div class="flex items-center gap-3">
+        <a href="/pricing" class="px-3.5 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 font-semibold text-xs border border-orange-500/30 transition flex items-center gap-1.5">
+          <span class="iconify" data-icon="lucide:credit-card"></span>
+          <span>Pricing & Plans</span>
+        </a>
+        <a href="/" class="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition">
+          Web Uploader &rarr;
+        </a>
+      </div>
     </div>
   </header>
 
-  <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-10 space-y-10">
+  <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-10 space-y-8">
     <div class="space-y-3">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold uppercase tracking-wider">
         REST API Reference
@@ -1335,6 +1473,31 @@ function serveDocumentationPage(domain) {
       <p class="text-zinc-400 text-sm sm:text-base max-w-2xl leading-relaxed">
         Integrate file and media uploads directly into your apps, websites, scripts, or bots. Upload any file type (images, PDF, .txt, .bat, audio, video, documents) and receive a permanent direct URL.
       </p>
+    </div>
+
+    <!-- Visible Premium API Request Card -->
+    <div class="bg-gradient-to-r from-orange-950/40 via-zinc-900 to-zinc-950 border border-orange-500/30 rounded-2xl p-6 sm:p-7 relative overflow-hidden shadow-2xl">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10">
+        <div class="space-y-1.5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[11px] font-bold uppercase tracking-wider">
+            <span>👑 Premium API Tier</span>
+          </div>
+          <h2 class="text-lg sm:text-xl font-bold text-white tracking-tight">Need to upload files larger than 20MB?</h2>
+          <p class="text-xs sm:text-sm text-zinc-300 max-w-xl">
+            Upgrade to a <strong>Premium Developer API Token</strong> powered by <strong>Cloudflare R2</strong>. Upload large media, PDFs, datasets, videos, and archives up to <strong>500MB</strong> with ultra-fast speed and zero bandwidth fees.
+          </p>
+        </div>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full sm:w-auto">
+          <a href="mailto:dhyeyp254@gmail.com?subject=Request%20for%20CommonThread%20Premium%20API&body=Hi%20Dhyey,%0A%0AI%20would%20like%20to%20request%20a%20Premium%20Developer%20API%20key%20for%20my%20project.%0A%0AProject%20Name:%0AExpected%20File%20Types:%0AAverage%20File%20Size:%0AEstimated%20Monthly%20Uploads:%0A%0AThanks!" class="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-black font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20">
+            <span class="iconify" data-icon="lucide:mail"></span>
+            <span>Request Premium API Key</span>
+          </a>
+          <a href="/pricing" class="px-4 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 font-semibold text-xs transition text-center flex items-center justify-center gap-1.5">
+            <span class="iconify" data-icon="lucide:tag"></span>
+            <span>View Pricing</span>
+          </a>
+        </div>
+      </div>
     </div>
 
     <!-- Endpoint Card -->
@@ -1571,6 +1734,310 @@ func main() {
   });
 }
 
+// ==========================================
+// PRICING PAGE (/pricing)
+// ==========================================
+function servePricingPage(domain) {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing & Plans - CommonThread Media Host</title>
+  <meta name="description" content="Simple, predictable developer pricing for universal file and media hosting with Cloudflare R2 large file support.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #09090b; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="text-zinc-100 min-h-screen flex flex-col antialiased selection:bg-orange-500/20 selection:text-orange-300">
+  <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-black font-bold text-lg shadow-lg shadow-orange-500/20">
+          <span class="iconify" data-icon="lucide:layers"></span>
+        </div>
+        <span class="font-bold text-lg tracking-tight">CommonThread <span class="text-orange-400 text-xs font-normal border border-orange-500/30 px-1.5 py-0.5 rounded-full bg-orange-500/10">Pricing</span></span>
+      </a>
+      <div class="flex items-center gap-3">
+        <a href="/docs" class="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition flex items-center gap-1.5">
+          <span class="iconify" data-icon="lucide:terminal"></span>
+          <span>API Docs</span>
+        </a>
+        <a href="/" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-orange-500/10">
+          <span>Web Uploader &rarr;</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-14 space-y-16">
+    <!-- Hero Section -->
+    <div class="text-center space-y-4 max-w-2xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold uppercase tracking-wider">
+        <span>Simple, Predictable Developer Pricing</span>
+      </div>
+      <h1 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+        Host Any Media & File.<br/><span class="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">Scale Without Limits.</span>
+      </h1>
+      <p class="text-zinc-400 text-sm sm:text-base leading-relaxed">
+        Start free with unlimited uploads up to 20MB, or upgrade to <strong>Cloudflare R2 High-Speed Storage</strong> for large files up to 500MB with zero bandwidth fees.
+      </p>
+    </div>
+
+    <!-- Pricing Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+      <!-- Free Tier -->
+      <div class="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-7 flex flex-col justify-between hover:border-zinc-700 transition space-y-6">
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Community</span>
+            <span class="px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 text-xs font-medium">Free Forever</span>
+          </div>
+          <div>
+            <div class="flex items-baseline gap-1">
+              <span class="text-4xl font-extrabold text-white">$0</span>
+              <span class="text-xs text-zinc-400">/ month</span>
+            </div>
+            <p class="text-xs text-zinc-400 mt-2">Perfect for everyday media hosting, small tools, and hobby projects.</p>
+          </div>
+          <ul class="space-y-3 text-xs text-zinc-300 border-t border-zinc-800/80 pt-5">
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-green-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span><strong>20 MB</strong> max file size</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-green-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span><strong>Unlimited</strong> total uploads</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-green-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Telegram Cloud Storage backend</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-green-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Standard REST API (<code class="text-zinc-200">POST /api/upload</code>)</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-green-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>All formats (.png, .pdf, .bat, .mp4, .txt)</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-green-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Direct permanent links</span>
+            </li>
+          </ul>
+        </div>
+        <a href="/" class="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs text-center transition block">
+          Use Free Web Uploader
+        </a>
+      </div>
+
+      <!-- Developer Pro / Premium (Highlighted) -->
+      <div class="bg-gradient-to-b from-orange-950/40 via-zinc-900/90 to-zinc-900 border-2 border-orange-500/50 rounded-3xl p-7 flex flex-col justify-between shadow-2xl shadow-orange-500/10 relative scale-105 space-y-6">
+        <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-400 text-black font-extrabold text-[11px] uppercase tracking-wider shadow-md">
+          👑 Most Popular
+        </div>
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-semibold text-orange-400 uppercase tracking-wider">Developer Pro</span>
+            <span class="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 text-xs font-semibold">Cloudflare R2</span>
+          </div>
+          <div>
+            <div class="flex items-baseline gap-1">
+              <span class="text-4xl font-extrabold text-white">$9</span>
+              <span class="text-xs text-zinc-400">/ month</span>
+            </div>
+            <p class="text-xs text-zinc-300 mt-2">For apps, bots, and production platforms requiring large file uploads.</p>
+          </div>
+          <ul class="space-y-3 text-xs text-zinc-200 border-t border-orange-500/20 pt-5">
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-orange-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span><strong>Up to 500 MB</strong> single file uploads</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-orange-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span><strong>Cloudflare R2 Storage</strong> (High-speed S3 compatible)</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-orange-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span><strong>Zero Egress Fees</strong> (Unlimited bandwidth downloads)</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-orange-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>HTTP Range Seeking for Video & Audio</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-orange-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Priority Developer Token (<code class="text-orange-300">ct_dev_...</code>)</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-orange-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>High concurrency & zero rate limits</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-orange-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Priority direct developer support</span>
+            </li>
+          </ul>
+        </div>
+        <a href="mailto:dhyeyp254@gmail.com?subject=Request%20for%20CommonThread%20Premium%20API&body=Hi%20Dhyey,%0A%0AI%20would%20like%20to%20request%20a%20Premium%20Developer%20API%20key%20for%20my%20project.%0A%0AProject%20Name:%0AExpected%20File%20Types:%0AAverage%20File%20Size:%0AEstimated%20Monthly%20Uploads:%0A%0AThanks!" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-black font-bold text-xs text-center transition block shadow-lg shadow-orange-500/20">
+          ✉️ Request Premium API Token
+        </a>
+      </div>
+
+      <!-- Enterprise Tier -->
+      <div class="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-7 flex flex-col justify-between hover:border-zinc-700 transition space-y-6">
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Enterprise</span>
+            <span class="px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300 text-xs font-medium">Custom Scale</span>
+          </div>
+          <div>
+            <div class="flex items-baseline gap-1">
+              <span class="text-4xl font-extrabold text-white">$29</span>
+              <span class="text-xs text-zinc-400">/ month</span>
+            </div>
+            <p class="text-xs text-zinc-400 mt-2">For high-volume platforms, enterprise storage, and custom SLAs.</p>
+          </div>
+          <ul class="space-y-3 text-xs text-zinc-300 border-t border-zinc-800/80 pt-5">
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-amber-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span><strong>Up to 2 GB+</strong> single file uploads</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-amber-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Dedicated Cloudflare R2 bucket</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-amber-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Custom domain branding (<code class="text-zinc-200">media.yourbrand.com</code>)</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-amber-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Custom lifecycle & retention policies</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-amber-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>99.9% uptime SLA agreement</span>
+            </li>
+            <li class="flex items-center gap-2.5">
+              <span class="iconify text-amber-400 text-base shrink-0" data-icon="lucide:check-circle-2"></span>
+              <span>Dedicated Discord / Telegram direct channel</span>
+            </li>
+          </ul>
+        </div>
+        <a href="mailto:dhyeyp254@gmail.com?subject=Enterprise%20Media%20Hosting%20Inquiry" class="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs text-center transition block">
+          Contact Sales &rarr;
+        </a>
+      </div>
+    </div>
+
+    <!-- Feature Comparison Table -->
+    <div class="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6 sm:p-8 space-y-6">
+      <h3 class="text-lg font-bold text-white">Compare Plans</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr class="border-b border-zinc-800 text-zinc-400">
+              <th class="py-3 px-4 font-semibold">Feature</th>
+              <th class="py-3 px-4 font-semibold">Free</th>
+              <th class="py-3 px-4 font-semibold text-orange-400">Developer Pro</th>
+              <th class="py-3 px-4 font-semibold text-amber-400">Enterprise</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
+            <tr>
+              <td class="py-3.5 px-4 font-medium text-white">Max Single File Size</td>
+              <td class="py-3.5 px-4">20 MB</td>
+              <td class="py-3.5 px-4 font-bold text-orange-400">500 MB</td>
+              <td class="py-3.5 px-4 font-bold text-amber-400">2 GB+</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-4 font-medium text-white">Storage Backend</td>
+              <td class="py-3.5 px-4">Telegram Cloud</td>
+              <td class="py-3.5 px-4">Cloudflare R2</td>
+              <td class="py-3.5 px-4">Dedicated R2 Bucket</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-4 font-medium text-white">Bandwidth / Egress Fees</td>
+              <td class="py-3.5 px-4">$0 (Free)</td>
+              <td class="py-3.5 px-4">$0 (Free)</td>
+              <td class="py-3.5 px-4">$0 (Free)</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-4 font-medium text-white">Audio & Video Seeking (Range)</td>
+              <td class="py-3.5 px-4">Included</td>
+              <td class="py-3.5 px-4">Ultra-fast Native R2</td>
+              <td class="py-3.5 px-4">Dedicated Edge Route</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-4 font-medium text-white">Developer API Key Support</td>
+              <td class="py-3.5 px-4">Yes</td>
+              <td class="py-3.5 px-4">Priority Key</td>
+              <td class="py-3.5 px-4">Multi-token RBAC</td>
+            </tr>
+            <tr>
+              <td class="py-3.5 px-4 font-medium text-white">Support</td>
+              <td class="py-3.5 px-4">Community</td>
+              <td class="py-3.5 px-4">Priority Email</td>
+              <td class="py-3.5 px-4">Dedicated SLA Line</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="space-y-6">
+      <div class="text-center space-y-2">
+        <h3 class="text-2xl font-bold text-white">Frequently Asked Questions</h3>
+        <p class="text-xs text-zinc-400">Everything you need to know about our storage tiers and developer API tokens.</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-2">
+          <h4 class="text-sm font-semibold text-white">How do I request a Premium API Token?</h4>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Click the <a href="mailto:dhyeyp254@gmail.com" class="text-orange-400 hover:underline">Request Premium API</a> button or email <code class="text-zinc-300">dhyeyp254@gmail.com</code> with your app details. We will provision your key right away.
+          </p>
+        </div>
+        <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-2">
+          <h4 class="text-sm font-semibold text-white">Can I upload any file format?</h4>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Yes! CommonThread hosts images (.png, .webp, .gif), documents (.pdf, .docx), scripts (.bat, .sh, .py), text (.txt), videos (.mp4), audio (.mp3), and archives (.zip).
+          </p>
+        </div>
+        <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-2">
+          <h4 class="text-sm font-semibold text-white">How does Cloudflare R2 work?</h4>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Cloudflare R2 is an enterprise-grade, S3-compatible object storage designed for high throughput, zero egress bandwidth costs, and low latency across Cloudflare's global edge network.
+          </p>
+        </div>
+        <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-2">
+          <h4 class="text-sm font-semibold text-white">Can I upgrade my free token later?</h4>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Yes. Existing tokens can be toggled to Premium without changing your token or code. All your previous uploads will continue working as normal.
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="border-t border-zinc-800/80 bg-zinc-950 py-8 text-center text-xs text-zinc-500">
+    <p>CommonThread &bull; Universal Media Hosting &bull; Contact: <a href="mailto:dhyeyp254@gmail.com" class="text-zinc-400 hover:underline">dhyeyp254@gmail.com</a></p>
+  </footer>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
+}
+
 
 
 // ==========================================
@@ -1595,7 +2062,7 @@ async function handleAdminListKeys(DATABASE, request, USERNAME, PASSWORD) {
   }
   try {
     await ensureApiKeysTable(DATABASE);
-    const result = await DATABASE.prepare('SELECT key, name, created_at, active, uploads_count FROM api_keys ORDER BY created_at DESC').all();
+    const result = await DATABASE.prepare('SELECT key, name, created_at, active, uploads_count, is_premium, max_size_mb FROM api_keys ORDER BY created_at DESC').all();
     return new Response(JSON.stringify({ success: true, keys: result.results || [] }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
@@ -1618,26 +2085,70 @@ async function handleAdminCreateKey(DATABASE, request, USERNAME, PASSWORD) {
   try {
     await ensureApiKeysTable(DATABASE);
     let name = 'Developer Key';
+    let isPremium = 0;
     try {
       const body = await request.json();
       if (body && body.name && body.name.trim()) name = body.name.trim();
+      if (body && (body.is_premium === 1 || body.is_premium === true)) isPremium = 1;
     } catch {}
 
+    const maxSizeMb = isPremium ? 500 : 20;
     const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
     const key = `ct_dev_${randomPart}`;
     const timestamp = Date.now();
 
-    await DATABASE.prepare('INSERT INTO api_keys (key, name, created_at, active, uploads_count) VALUES (?, ?, ?, 1, 0)')
-      .bind(key, name, timestamp).run();
+    await DATABASE.prepare('INSERT INTO api_keys (key, name, created_at, active, uploads_count, is_premium, max_size_mb) VALUES (?, ?, ?, 1, 0, ?, ?)')
+      .bind(key, name, timestamp, isPremium, maxSizeMb).run();
 
     return new Response(JSON.stringify({
       success: true,
       key,
       name,
+      is_premium: isPremium,
+      max_size_mb: maxSizeMb,
       created_at: timestamp
     }), {
       status: 201,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
+async function handleAdminUpdateKey(DATABASE, request, USERNAME, PASSWORD) {
+  if (!authenticate(request, USERNAME, PASSWORD)) {
+    return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'Content-Type': 'application/json' }
+    });
+  }
+  if (!DATABASE) {
+    return new Response(JSON.stringify({ success: false, error: 'Database not bound' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+  try {
+    await ensureApiKeysTable(DATABASE);
+    const body = await request.json();
+    const { key, is_premium, max_size_mb } = body;
+    if (!key) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing key parameter' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const premiumVal = (is_premium === 1 || is_premium === true) ? 1 : 0;
+    const sizeVal = max_size_mb ? parseInt(max_size_mb, 10) : (premiumVal ? 500 : 20);
+
+    await DATABASE.prepare('UPDATE api_keys SET is_premium = ?, max_size_mb = ? WHERE key = ?')
+      .bind(premiumVal, sizeVal, key).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: `API Key switched to ${premiumVal ? 'Premium (500MB / R2)' : 'Free (20MB)'}`,
+      key: key,
+      is_premium: premiumVal,
+      max_size_mb: sizeVal
+    }), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (err) {
@@ -2093,6 +2604,38 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
   .btn-revoke:hover {
     background: #a40e26;
   }
+  .badge-tier {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .badge-free {
+    background: #eef2ff;
+    color: #4338ca;
+    border-color: #c7d2fe;
+  }
+  .badge-free:hover {
+    background: #e0e7ff;
+    border-color: #818cf8;
+    transform: scale(1.02);
+  }
+  .badge-premium {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+    border-color: #f59e0b;
+    box-shadow: 0 1px 6px rgba(245, 158, 11, 0.25);
+  }
+  .badge-premium:hover {
+    background: linear-gradient(135deg, #fde68a, #fcd34d);
+    transform: scale(1.02);
+  }
   .new-token-alert {
     background: #dafbe1;
     border: 1px solid #4ac26b;
@@ -2396,39 +2939,63 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
 
     async function loadApiKeys() {
       const tbody = document.getElementById('tokens-table-body');
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">Loading tokens...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #888; padding: 20px;">Loading tokens...</td></tr>';
       try {
         const res = await fetch('/admin/api/keys');
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Failed to load');
         if (!data.keys || data.keys.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">No developer tokens generated yet. Click "Generate API Token" above to create one.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #888; padding: 20px;">No developer tokens generated yet. Click "Generate API Token" above to create one.</td></tr>';
           return;
         }
         tbody.innerHTML = data.keys.map(function(k) {
           const dateStr = new Date(k.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const isPrem = k.is_premium === 1;
+          const tierBtn = isPrem
+            ? '<button class="badge-tier badge-premium" onclick="toggleKeyTier(\\'' + escapeHtml(k.key) + '\\', 0)" title="Click to switch to Free (20MB)">👑 Premium (500MB) <span style="font-size:10px; opacity:0.8;">⇄ Free</span></button>'
+            : '<button class="badge-tier badge-free" onclick="toggleKeyTier(\\'' + escapeHtml(k.key) + '\\', 1)" title="Click to switch to Premium (500MB)">⚡ Free (20MB) <span style="font-size:10px; opacity:0.8;">⇄ Upgrade</span></button>';
           return '<tr>' +
             '<td><strong>' + escapeHtml(k.name) + '</strong></td>' +
             '<td><code class="token-code">' + escapeHtml(k.key) + '</code><button class="btn-copy-token" onclick="copyText(\\'' + escapeHtml(k.key) + '\\')">Copy</button></td>' +
+            '<td>' + tierBtn + '</td>' +
             '<td>' + dateStr + '</td>' +
             '<td>' + (k.uploads_count || 0) + '</td>' +
             '<td><button class="btn-revoke" onclick="revokeApiKey(\\'' + escapeHtml(k.key) + '\\')">Revoke</button></td>' +
           '</tr>';
         }).join('');
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #cf222e; padding: 20px;">Failed to load tokens: ' + err.message + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #cf222e; padding: 20px;">Failed to load tokens: ' + err.message + '</td></tr>';
+      }
+    }
+
+    async function toggleKeyTier(key, newTier) {
+      const tierName = newTier === 1 ? 'Premium (500MB / Cloudflare R2)' : 'Free (20MB / Telegram)';
+      if (!confirm('Switch this API key to ' + tierName + '?')) return;
+      try {
+        const res = await fetch('/admin/api/keys', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: key, is_premium: newTier })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Update failed');
+        loadApiKeys();
+      } catch (err) {
+        alert('Failed to update tier: ' + err.message);
       }
     }
 
     let latestCreatedToken = '';
     async function createNewApiKey() {
       const nameInput = document.getElementById('new-token-name');
+      const tierSelect = document.getElementById('new-token-tier');
       const name = nameInput.value.trim() || 'Developer Key';
+      const isPremium = tierSelect ? parseInt(tierSelect.value, 10) : 0;
       try {
         const res = await fetch('/admin/api/keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name })
+          body: JSON.stringify({ name: name, is_premium: isPremium })
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Creation failed');
@@ -2484,6 +3051,7 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
         <div class="nav-tabs">
           <button id="tab-gallery-btn" class="nav-tab active" onclick="switchAdminTab('gallery')">📁 Media Gallery (<span id="total-count">${totalCount}</span>)</button>
           <button id="tab-tokens-btn" class="nav-tab" onclick="switchAdminTab('tokens')">🔑 Developer API Tokens</button>
+          <a href="/pricing" target="_blank" class="nav-link">💳 Pricing & Plans &rarr;</a>
           <a href="/docs" target="_blank" class="nav-link">📖 API Docs &rarr;</a>
           <a href="/" target="_blank" class="nav-link">🌐 Web Uploader &rarr;</a>
         </div>
@@ -2525,9 +3093,13 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
         <!-- Create Token Card -->
         <div class="token-card">
           <h3>Issue New Developer API Token</h3>
-          <p>Generate a unique API key for an external developer, mobile app, bot, or automated script.</p>
+          <p>Generate an API key for an external developer, mobile app, bot, or script. Choose Free (20MB) or Premium (500MB / R2).</p>
           <div class="token-form">
             <input type="text" id="new-token-name" class="token-input" placeholder="Developer / Application Name (e.g. Discord Bot, App Client)" />
+            <select id="new-token-tier" class="token-input" style="flex: 0 0 190px; min-width: 170px; background: white;">
+              <option value="0">⚡ Free Tier (20MB)</option>
+              <option value="1">👑 Premium Tier (500MB)</option>
+            </select>
             <button class="btn-primary" onclick="createNewApiKey()">Generate API Token</button>
           </div>
           <div id="new-token-alert" class="new-token-alert">
@@ -2541,7 +3113,10 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
 
         <!-- Active Tokens List -->
         <div class="token-card">
-          <h3>Active Developer Tokens</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h3 style="margin: 0;">Active Developer Tokens</h3>
+            <span style="font-size: 12px; color: #0969da; background: #eef2ff; padding: 3px 8px; border-radius: 6px;">Tip: Click any tier badge to toggle between Free & Premium</span>
+          </div>
           <p>Developers use these tokens in the <code>X-API-Key: YOUR_TOKEN</code> header or <code>?key=YOUR_TOKEN</code> parameter.</p>
           <div style="overflow-x: auto;">
             <table class="token-table">
@@ -2549,13 +3124,14 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
                 <tr>
                   <th>Name / Application</th>
                   <th>API Token</th>
+                  <th>Plan Tier (Click to Toggle)</th>
                   <th>Created</th>
                   <th>Uploads</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody id="tokens-table-body">
-                <tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">Loading tokens...</td></tr>
+                <tr><td colspan="6" style="text-align: center; color: #888; padding: 20px;">Loading tokens...</td></tr>
               </tbody>
             </table>
           </div>

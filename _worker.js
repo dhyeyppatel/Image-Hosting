@@ -1583,7 +1583,10 @@ async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth, domain
 
   return new Response(html, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
+    }
   });
 }
 
@@ -1639,7 +1642,10 @@ function handleEmailRedirect(request) {
 
   return new Response(html, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
+    }
   });
 }
 
@@ -1975,7 +1981,10 @@ func main() {
 
   return new Response(html, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
+    }
   });
 }
 
@@ -2319,7 +2328,10 @@ function servePricingPage(domain) {
 
   return new Response(html, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
+    }
   });
 }
 
@@ -3454,7 +3466,13 @@ print("File URL:", res.json()["url"])
   </body>
   </html>     
   `;
-  return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
+    }
+  });
 }
 
 async function fetchMediaData(DATABASE, page = 1, limit = 100) {

@@ -41,22 +41,22 @@ CommonThread supports **any file format** (Images, Videos, Audio, PDFs, `.txt`, 
 
 ```mermaid
 flowchart TD
-    Client([👤 Client: App / Web / Script / Bot / ShareX]) -->|HTTP POST Request| CF[⚡ Cloudflare Worker / Pages Edge]
+    Client["👤 Client: App / Web / Script / Bot / ShareX"] -->|HTTP POST Request| CF["⚡ Cloudflare Worker / Pages Edge"]
     
-    subgraph Routing & Auth
-        CF --> Auth{Validate Token / Size}
-        Auth -->|Size <= 20MB| TGRoute[📦 Telegram Path]
-        Auth -->|Size > 20MB & Premium| R2Route[🪣 Cloudflare R2 Path]
+    subgraph RoutingAuth["Routing and Storage Tiering"]
+        CF --> Auth{"Validate Token and Size"}
+        Auth -->|"Size <= 20MB"| TGRoute["📦 Telegram Storage Path"]
+        Auth -->|"Size > 20MB and Premium"| R2Route["🪣 Cloudflare R2 Path"]
     end
 
-    TGRoute -->|sendDocument + Rich HTML Caption| TG[☁️ Telegram Storage Channel]
-    R2Route -->|R2 PutObject| R2[(🗄️ Cloudflare R2 Bucket)]
+    TGRoute -->|"sendDocument + Rich HTML Caption"| TG[("☁️ Telegram Storage Channel")]
+    R2Route -->|"R2 PutObject"| R2[("🗄️ Cloudflare R2 Bucket")]
 
-    CF -->|Save Metadata & Slugs| D1[(🗄️ Cloudflare D1 Database)]
-    CF -->|Cache Media at Edge| Cache[(🚀 Cloudflare Global CDN)]
+    CF -->|"Save Metadata and Slugs"| D1[("🗄️ Cloudflare D1 Database")]
+    CF -->|"Cache Media at Edge"| Cache[("🚀 Cloudflare Global CDN")]
 
-    ClientWeb([🌐 Telegram App User]) -->|Upload File| Bot[🤖 Telegram Bot Webhook (Vercel)]
-    Bot -->|Forward & Register| CF
+    ClientWeb["🌐 Telegram App User"] -->|"Upload File"| Bot["🤖 Telegram Bot Webhook (Vercel)"]
+    Bot -->|"Forward and Register"| CF
 ```
 
 ---

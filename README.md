@@ -2,16 +2,17 @@
 
 # 🚀 CommonThread
 
-**A high-performance, serverless universal media hosting platform & developer API built on Cloudflare Pages/Workers, backed by Telegram Cloud Storage and Cloudflare D1.**
+**A high-performance, serverless universal media hosting platform & developer API built on Cloudflare Pages/Workers, backed by Telegram Cloud Storage, Cloudflare R2, and Cloudflare D1.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Cloudflare Pages](https://img.shields.io/badge/Cloudflare-Pages%20%26%20Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://pages.cloudflare.com/)
 [![Cloudflare D1](https://img.shields.io/badge/Database-Cloudflare%20D1-F38020?style=for-the-badge&logo=sqlite&logoColor=white)](https://developers.cloudflare.com/d1/)
+[![Cloudflare R2](https://img.shields.io/badge/Object%20Storage-Cloudflare%20R2-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/r2/)
 [![Telegram Bot API](https://img.shields.io/badge/Storage-Telegram%20Bot%20API-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://core.telegram.org/bots/api)
 
 <br/>
 
-[**Web Uploader**](https://media-hosting.dhyeyp254.workers.dev/) • [**Pricing & Plans**](https://media-hosting.dhyeyp254.workers.dev/pricing) • [**Developer API Docs**](https://media-hosting.dhyeyp254.workers.dev/docs) • [**ShareX Config**](https://media-hosting.dhyeyp254.workers.dev/api/sharex) • [**Telegram Bot**](https://t.me/Imagehostssbot) • [**Deployment Guide**](#-deployment-guide) • [**Developer API Reference**](#-developer-api-reference)
+[**Web Uploader**](https://media-hosting.dhyeyp254.workers.dev/) • [**Pricing & Plans**](https://media-hosting.dhyeyp254.workers.dev/pricing) • [**Developer API Docs**](https://media-hosting.dhyeyp254.workers.dev/docs) • [**ShareX Config**](https://media-hosting.dhyeyp254.workers.dev/api/sharex) • [**Telegram Bot**](https://t.me/Imagehostssbot) • [**Deployment Guide**](#-deployment-guide) • [**API Reference**](#-developer-api-reference)
 
 </div>
 
@@ -19,180 +20,289 @@
 
 ## 📖 Overview
 
-**CommonThread** provides a free, unlimited cloud file and media hosting service with a dedicated **Developer API**. It allows developers to integrate file uploads directly into their own applications, websites, bots, and tools for **any file format** (Images, PDFs, Videos, Audio, `.txt`, `.bat`, `.sh`, documents, archives, etc.).
+**CommonThread** is an ultra-fast, serverless file and media hosting service equipped with a production-ready **Developer REST API**. It is built for developers who need to integrate high-speed file hosting directly into their own applications, mobile apps, websites, Discord/Telegram bots, or automation scripts.
 
-Powered by **Cloudflare Workers / Pages** at the edge and **Cloudflare D1 (Serverless SQLite)** for metadata indexing, CommonThread delivers instant uploads, global edge caching, and direct file delivery.
+CommonThread supports **any file format** (Images, Videos, Audio, PDFs, `.txt`, `.bat`, `.sh`, `.zip`, binaries, and documents) with native range streaming, global edge caching, and zero egress fees.
+
+### 🌟 Key Highlights
+
+- **Universal Format Support**: Host images, audio, video, documents, scripts, archives, and binaries without arbitrary MIME-type restrictions.
+- **Smart Cost-Optimized Storage**:
+  - Files $\le$ 20 MB are uploaded directly to **Telegram Cloud Storage** ($0 cost, high-speed CDN, unlimited storage).
+  - Files $>$ 20 MB (Premium Tier) are routed to **Cloudflare R2 Object Storage** (S3-compatible, zero egress fees).
+- **Rich Telegram Metadata Captions**: Every file archived in Telegram includes an HTML caption with full metadata (filename, exact size, MIME type, upload source, auth tier, UTC & IST timestamps, direct link, slug ID, and delete token).
+- **ImgBB API Compatibility**: Drop-in replacement endpoint (`POST /api/1/upload`) compatible with existing third-party uploaders, plugins, and ShareX.
+- **Built-in Developer Token Management**: Generate, monitor, and instantly toggle API keys between **Free (20MB)** and **Premium (500MB)** directly from the `/admin` dashboard.
+- **Security-First Architecture**: Anti-XSS attachment enforcement for executable scripts (`.bat`, `.sh`, `.exe`, `.html`, `.svg`), SSRF protection against private IP probing, and strict memory limits.
 
 ---
 
 ## 🏗️ Architecture
 
 ```mermaid
-flowchart LR
-    Client([👤 App / Website / Python / cURL / Bot]) -->|POST /api/upload| CF[⚡ Cloudflare Worker]
-    CF -->|Insert URL Mapping| D1[(🗄️ Cloudflare D1)]
-    CF -->|sendDocument / getFile| TG[☁️ Telegram Storage]
-    CF -->|Cache Response| Cache[(🚀 Global Edge Cache)]
-```
+flowchart TD
+    Client([👤 Client: App / Web / Script / Bot / ShareX]) -->|HTTP POST Request| CF[⚡ Cloudflare Worker / Pages Edge]
+    
+    subgraph Routing & Auth
+        CF --> Auth{Validate Token / Size}
+        Auth -->|Size <= 20MB| TGRoute[📦 Telegram Path]
+        Auth -->|Size > 20MB & Premium| R2Route[🪣 Cloudflare R2 Path]
+    end
 
-* **Core Engine (Cloudflare)**: Runs `_worker.js` on Cloudflare Workers/Pages with D1 database binding, handling media ingestion, range streaming, edge caching, and developer APIs.
-* **Telegram Storage**: Private Telegram channel used as a high-capacity, zero-cost storage backend.
-* **Telegram Bot (Vercel)**: Runs `api/index.py` on Vercel as a webhook to let Telegram users upload files directly from Telegram chat and receive direct hosting URLs.
+    TGRoute -->|sendDocument + Rich HTML Caption| TG[☁️ Telegram Storage Channel]
+    R2Route -->|R2 PutObject| R2[(🗄️ Cloudflare R2 Bucket)]
+
+    CF -->|Save Metadata & Slugs| D1[(🗄️ Cloudflare D1 Database)]
+    CF -->|Cache Media at Edge| Cache[(🚀 Cloudflare Global CDN)]
+
+    ClientWeb([🌐 Telegram App User]) -->|Upload File| Bot[🤖 Telegram Bot Webhook (Vercel)]
+    Bot -->|Forward & Register| CF
+```
 
 ---
 
-## ✨ Features
+## ✨ Feature Comparison
 
-- ⚡ **Developer-First API (`POST /api/upload`)**: Upload any file from your own apps, websites, or scripts with one HTTP call.
-- 📁 **Universal Format Support**: Host any file type:
-  - **Images**: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.bmp`, `.ico`
-  - **Documents**: `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.txt`, `.csv`
-  - **Scripts & Code**: `.bat`, `.cmd`, `.sh`, `.ps1`, `.py`, `.js`, `.json`, `.xml`, `.log`
-  - **Videos & Audio**: `.mp4`, `.webm`, `.mp3`, `.wav` (with native HTTP `Range` streaming)
-  - **Archives & Binaries**: `.zip`, `.rar`, `.7z`, `.exe`, `.msi`, `.apk`
-- 🚀 **Global Edge Caching**: Sub-millisecond media delivery via Cloudflare Edge Cache.
-- 🔒 **Security Hardened**:
-  - **Anti-XSS**: Script and executable files (`.bat`, `.sh`, `.exe`, `.html`, `.svg`) are served as direct attachments on the web to prevent Stored XSS.
-  - **SSRF Hardened**: Remote URL ingestion validates protocols and blocks loopback, private IPv4 subnets, and cloud metadata IPs.
-  - **OOM Defense**: Size checked prior to memory buffering.
-- 🤖 **Telegram Bot Integration**: Deploy the Flask webhook on Vercel to allow direct Telegram uploads.
+| Feature | ⚡ Free Tier | 👑 Developer Pro (Premium) | 🏢 Enterprise |
+| :--- | :--- | :--- | :--- |
+| **Price** | **$0 / forever** | **$9 / month** | **$29 / month** |
+| **Max Single File Size** | **20 MB** | **500 MB** | **2 GB+** |
+| **Storage Backend** | Telegram Cloud Storage | **Telegram** (&le; 20MB) & **Cloudflare R2** (&gt; 20MB) | Dedicated Cloudflare R2 Bucket |
+| **Bandwidth / Egress** | Unlimited ($0) | Unlimited ($0) | Unlimited ($0) |
+| **Seeking / Streaming** | Standard HTTP Range | High-Speed Native Edge Streaming | Dedicated Edge Route |
+| **Rich Metadata Caption** | Included | Included | Included |
+| **Token Prefix** | `ct_dev_...` | Priority `ct_dev_...` | Multi-token RBAC |
+| **How to Request** | Instant via `/admin` | [Request via Email](mailto:dhyeyhosts@gmail.com) | [Contact Sales](mailto:dhyeyhosts@gmail.com) |
+
+*Full interactive feature matrix available at [`/pricing`](https://media-hosting.dhyeyp254.workers.dev/pricing).*
 
 ---
 
 ## 📡 Developer API Reference
 
-### Upload File (`POST /api/upload`)
+### 1. Upload Any File (`POST /api/upload`)
 
-Upload any file from your app or project to get a direct hosted URL.
+Standard multipart upload endpoint for developers and applications.
 
-- **Endpoint**: `https://<YOUR_DOMAIN>/api/upload`
+- **URL**: `https://<YOUR_DOMAIN>/api/upload`
 - **Method**: `POST`
-- **Headers**:
-  - `Content-Type: multipart/form-data`
-  - `X-API-Key: <YOUR_DEVELOPER_TOKEN>` *(or Bearer token in `Authorization: Bearer <YOUR_DEVELOPER_TOKEN>`, or query `?key=<YOUR_DEVELOPER_TOKEN>`)*
-- **Parameters**:
-  - `file`: The binary file to upload (any format: image, pdf, .txt, .bat, audio, video).
-  - *(or JSON body with `{"url": "https://example.com/file.png"}` for remote URL mirroring)*
+- **Authentication** *(any of the following)*:
+  - Header: `X-API-Key: ct_dev_...`
+  - Header: `Authorization: Bearer ct_dev_...`
+  - Query parameter: `?key=ct_dev_...`
+  - Form field: `key=ct_dev_...`
 
-#### Response (`200 OK`)
+#### Parameters
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `file` | `File` (Binary) | The file to upload (Image, PDF, Video, Audio, Script, Archive, etc.). |
+| `url` | `String` *(optional)* | Remote URL to mirror/ingest directly into hosting. |
+
+#### Example Response (`200 OK`)
 ```json
 {
   "success": true,
-  "url": "https://media-hosting.dhyeyp254.workers.dev/1794851338016_im104h.bat",
-  "filename": "my_script.bat",
-  "size": 1024,
-  "size_formatted": "1.00 KB",
-  "mime_type": "application/x-bat",
-  "uploaded_at": "2026-11-16T17:48:00.000Z"
+  "url": "https://media-hosting.dhyeyp254.workers.dev/1794851338016_im104h.pdf",
+  "filename": "document.pdf",
+  "size": 1048576,
+  "size_formatted": "1.00 MB",
+  "mime_type": "application/pdf",
+  "uploaded_at": "2026-11-16T17:48:00.000Z",
+  "delete_token": "del_a1b2c3d4e5f6..."
 }
 ```
 
 ---
 
-### 🔑 Issuing & Managing Developer API Tokens
+### 2. ImgBB Compatible Endpoint (`POST /api/1/upload`)
 
-You can issue tokens to other developers so they can use your platform in their apps, bots, or websites:
+Drop-in replacement for software that integrates with ImgBB (such as **ShareX**, mobile apps, or CMS plugins).
 
-1. Go to your Admin Dashboard (`https://<YOUR_DOMAIN>/admin`).
-2. Click on the **"🔑 Developer API Tokens"** tab.
-3. Enter the developer or app name (e.g. `Client Mobile App`, `Discord Bot`), choose the tier (**Free 20MB** or **Premium 500MB**), and click **"Generate API Token"**.
-4. Copy the generated key (e.g. `ct_dev_...`) and hand it to the developer! Developers pass this token with their requests using:
-   - Header: `X-API-Key: YOUR_TOKEN`
-   - Header: `Authorization: Bearer YOUR_TOKEN`
-   - Query: `?key=YOUR_TOKEN`
-   - Form-data: `key=YOUR_TOKEN`
-5. **One-Click Tier Toggle**: In the Active Tokens table, click on the **Plan Tier badge** for any token to switch it instantly between **Free** and **Premium** at any time.
+- **URL**: `https://<YOUR_DOMAIN>/api/1/upload`
+- **Method**: `POST`
+- **Parameters**:
+  - `key`: Developer API token.
+  - `image`: Binary file or Base64-encoded string.
+
+#### Example Response (`200 OK`)
+```json
+{
+  "data": {
+    "id": "1794851338016_im104h",
+    "title": "photo.png",
+    "url_viewer": "https://media-hosting.dhyeyp254.workers.dev/1794851338016_im104h.png",
+    "url": "https://media-hosting.dhyeyp254.workers.dev/1794851338016_im104h.png",
+    "display_url": "https://media-hosting.dhyeyp254.workers.dev/1794851338016_im104h.png",
+    "size": 245760,
+    "time": 1794851338,
+    "image": {
+      "filename": "photo.png",
+      "name": "photo.png",
+      "mime": "image/png",
+      "extension": "png",
+      "url": "https://media-hosting.dhyeyp254.workers.dev/1794851338016_im104h.png"
+    },
+    "delete_url": "https://media-hosting.dhyeyp254.workers.dev/delete/del_a1b2c3d4e5f6..."
+  },
+  "success": true,
+  "status": 200
+}
+```
 
 ---
 
-### 💳 Plans & Storage Tiers
+### 3. One-Click ShareX Integration (`GET /api/sharex`)
 
-| Feature | ⚡ Free Tier | 👑 Developer Pro (Premium) | 🏢 Enterprise |
-| :--- | :--- | :--- | :--- |
-| **Price** | **$0 / forever** | **$9 / month** | **$29 / month** |
-| **Max Single File** | **20 MB** | **500 MB** | **2 GB+** |
-| **Storage Backend** | Telegram Cloud Storage | **Telegram** (&le; 20MB) & **Cloudflare R2** (&gt; 20MB) | Dedicated Cloudflare R2 Bucket |
-| **Bandwidth / Egress** | Unlimited ($0) | Unlimited ($0) | Unlimited ($0) |
-| **Seeking / Streaming** | Standard Range | High-Speed Native Edge Streaming | Dedicated Edge Route |
-| **Token Format** | `ct_dev_...` | Priority `ct_dev_...` | Multi-token RBAC |
-| **How to Request** | Instant via `/admin` | Email [dhyeyhosts@gmail.com](mailto:dhyeyhosts@gmail.com) | Contact Sales |
-
-*View the full interactive comparison at [`/pricing`](https://media-hosting.dhyeyp254.workers.dev/pricing).*
+Visit `https://<YOUR_DOMAIN>/api/sharex` to download a pre-configured `.sxcu` destination file. Double-click to import it into ShareX for instant screenshot and screen-recording uploads.
 
 ---
 
-### Integration Examples
+## 💻 Code Examples
 
-#### 1. Python (`requests`)
+### Python (`requests`)
 ```python
 import requests
 
-url = "https://media-hosting.dhyeyp254.workers.dev/api/upload"
-headers = {"X-API-Key": "YOUR_DEVELOPER_TOKEN"}
+API_URL = "https://media-hosting.dhyeyp254.workers.dev/api/upload"
+API_KEY = "ct_dev_YOUR_TOKEN_HERE"
 
-# Upload any file: .bat, .pdf, .png, .txt, etc.
-with open("my_script.bat", "rb") as f:
-    response = requests.post(url, headers=headers, files={"file": f})
+# Upload any file: .png, .pdf, .bat, .mp4, etc.
+with open("report.pdf", "rb") as f:
+    response = requests.post(
+        API_URL,
+        headers={"X-API-Key": API_KEY},
+        files={"file": f}
+    )
 
 data = response.json()
-if data["success"]:
+if data.get("success"):
     print("Direct File URL:", data["url"])
 else:
-    print("Upload Failed:", data["error"])
+    print("Upload error:", data.get("error"))
 ```
 
-#### 2. JavaScript / Node.js (`fetch`)
+### JavaScript / Node.js (`fetch`)
 ```javascript
+const fs = require('fs');
+const blob = new Blob([fs.readFileSync('my_file.zip')]);
 const formData = new FormData();
-formData.append("file", fileInput.files[0]);
+formData.append('file', blob, 'my_file.zip');
 
-const response = await fetch("https://media-hosting.dhyeyp254.workers.dev/api/upload", {
-  method: "POST",
+const res = await fetch('https://media-hosting.dhyeyp254.workers.dev/api/upload', {
+  method: 'POST',
   headers: {
-    "X-API-Key": "YOUR_DEVELOPER_TOKEN"
+    'X-API-Key': 'ct_dev_YOUR_TOKEN_HERE'
   },
   body: formData
 });
 
-const data = await response.json();
-console.log("Direct File URL:", data.url);
+const data = await res.json();
+console.log('Direct URL:', data.url);
 ```
 
-#### 3. cURL
+### cURL
 ```bash
 curl -X POST https://media-hosting.dhyeyp254.workers.dev/api/upload \
-  -H "X-API-Key: YOUR_DEVELOPER_TOKEN" \
+  -H "X-API-Key: ct_dev_YOUR_TOKEN_HERE" \
   -F "file=@/path/to/any_file.pdf"
 ```
 
-#### 4. PHP
-```php
-<?php
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, "https://media-hosting.dhyeyp254.workers.dev/api/upload");
-curl_setopt($ch, CURLOPT_HTTPHEADER, ["X-API-Key: YOUR_DEVELOPER_TOKEN"]);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, [
-    "file" => new CURLFile("/path/to/document.pdf")
-]);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+### Go
+```go
+package main
 
-$data = json_decode(curl_exec($ch), true);
-curl_close($ch);
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
+)
 
-echo "Direct File URL: " . $data["url"];
-?>
+func main() {
+	file, _ := os.Open("archive.zip")
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "archive.zip")
+	io.Copy(part, file)
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", "https://media-hosting.dhyeyp254.workers.dev/api/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-API-Key", "ct_dev_YOUR_TOKEN_HERE")
+
+	client := &http.Client{}
+	resp, _ := client.Do(req)
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	fmt.Println(string(respBody))
+}
 ```
+
+---
+
+## 🔑 Admin Dashboard & Token Management
+
+Navigate to `https://<YOUR_DOMAIN>/admin` and log in with your credentials.
+
+### Features
+1. **Media Gallery**:
+   - Preview all hosted images and video clips.
+   - Batch deletion with multi-select.
+   - One-click BBCode, Markdown, and Direct Link copying.
+2. **Developer API Tokens Tab**:
+   - **Issue New Tokens**: Set custom application name and initial tier (Free or Premium).
+   - **One-Click Tier Toggle**: Click the tier badge on any token to instantly convert it between **Free (20MB)** and **Premium (500MB)**.
+   - **Token Revocation**: Disable compromised tokens immediately.
+   - **Upload Counter**: Track lifetime uploads made with each token.
+
+---
+
+## ⚙️ Environment Variables Reference
+
+### Cloudflare Worker / Pages Environment
+
+Configure these in the Cloudflare Dashboard under **Workers & Pages > Settings > Variables and Secrets**:
+
+| Variable | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `DATABASE` | D1 Binding | **Yes** | Cloudflare D1 Database binding named `DATABASE`. |
+| `TG_BOT_TOKEN` | Secret | **Yes** | Telegram Bot Token obtained from [@BotFather](https://t.me/BotFather). |
+| `TG_CHAT_ID` | Secret | **Yes** | Telegram Private Channel / Group ID used for storage backup. |
+| `USERNAME` | Variable | **Yes** | Admin dashboard username (default: `admin`). |
+| `PASSWORD` | Secret | **Yes** | Admin dashboard password. |
+| `DOMAIN` | Variable | Optional | Public domain (e.g. `media-hosting.dhyeyp254.workers.dev`). |
+| `R2_BUCKET` | R2 Binding | Optional | Cloudflare R2 bucket binding named `R2_BUCKET` for files $> 20$MB. |
+| `API_KEY` | Secret | Optional | Legacy global API key (if set, unauthenticated uploads are blocked). |
+
+### Vercel Environment (Telegram Bot Webhook)
+
+Configure these in the Vercel Dashboard under **Project Settings > Environment Variables**:
+
+| Variable | Required | Description |
+| :--- | :--- | :--- |
+| `TG_BOT_TOKEN` | **Yes** | Telegram Bot Token from [@BotFather](https://t.me/BotFather). |
+| `TG_CHAT_ID` | **Yes** | Telegram Channel ID for file archive storage. |
+| `CF_DOMAIN` | **Yes** | Cloudflare Worker domain (e.g. `media-hosting.dhyeyp254.workers.dev`). |
+| `CF_USERNAME` | **Yes** | Worker admin username (e.g. `admin`). |
+| `CF_PASSWORD` | **Yes** | Worker admin password. |
+| `CF_API_KEY` | Optional | Developer token `ct_dev_...` to use for bot uploads. |
 
 ---
 
 ## 🚀 Deployment Guide
 
-### Cloudflare Deployment (Core Media Host & API)
+### 1. Cloudflare Setup (Core Worker & D1 Database)
 
-1. **Create D1 Database** in Cloudflare Dashboard:
-   - Name: `ar_hosting_db`
-   - Console command:
+1. **Create D1 Database**:
+   - In Cloudflare Dashboard, go to **Storage & Databases > D1**.
+   - Create a database named `ar_hosting_db`.
+   - Open the **Console** tab and run the schema setup:
      ```sql
      CREATE TABLE IF NOT EXISTS media (
        url TEXT PRIMARY KEY,
@@ -203,37 +313,45 @@ echo "Direct File URL: " . $data["url"];
        created_at INTEGER DEFAULT 0,
        delete_token TEXT DEFAULT ''
      );
+
+     CREATE TABLE IF NOT EXISTS api_keys (
+       key TEXT PRIMARY KEY,
+       name TEXT,
+       created_at INTEGER,
+       active INTEGER DEFAULT 1,
+       uploads_count INTEGER DEFAULT 0,
+       is_premium INTEGER DEFAULT 0,
+       max_size_mb INTEGER DEFAULT 20
+     );
      ```
-2. **Deploy to Cloudflare Pages**:
-   - Connect your GitHub repository.
-   - Build command: *(leave blank)*
-   - Build output directory: `/`
-3. **Environment Variables**:
-   - `DOMAIN`: Your worker/pages domain (e.g. `media-hosting.dhyeyp254.workers.dev`).
-   - `TG_BOT_TOKEN`: Telegram bot token from `@BotFather`.
-   - `TG_CHAT_ID`: Telegram channel ID for backup storage.
-   - `DATABASE`: D1 Database binding named `DATABASE`.
-   - `USERNAME`: Admin username for `/admin`.
-   - `PASSWORD`: Admin password for `/admin`.
-   - `API_KEY` *(optional)*: Key to restrict developer uploads (if left blank, API is open).
+2. **Deploy Worker**:
+   - Push this repository to GitHub.
+   - In Cloudflare Workers, deploy the worker with `_worker.js`.
+   - In **Settings > Bindings**, bind your D1 database to the variable name **`DATABASE`**.
+   - *(Optional for Premium)*: In **Settings > Bindings**, bind an R2 Bucket to the variable name **`R2_BUCKET`**.
+   - Add the required environment variables (`TG_BOT_TOKEN`, `TG_CHAT_ID`, `USERNAME`, `PASSWORD`).
+
+### 2. Vercel Setup (Telegram Bot Webhook)
+
+1. Connect this repository to Vercel (uses `api/index.py`).
+2. Add the environment variables: `TG_BOT_TOKEN`, `TG_CHAT_ID`, `CF_DOMAIN`, `CF_USERNAME`, `CF_PASSWORD`.
+3. Set your Telegram webhook:
+   ```bash
+   curl -F "url=https://<YOUR-VERCEL-APP>.vercel.app/webhook" https://api.telegram.org/bot<YOUR_TG_BOT_TOKEN>/setWebhook
+   ```
+4. Now, any file or image sent to [@Imagehostssbot](https://t.me/Imagehostssbot) is automatically hosted on Cloudflare with a direct URL returned in chat!
 
 ---
 
-### Vercel Deployment (Telegram Bot Webhook)
+## ✉️ Contact & Support
 
-1. Connect repository to Vercel.
-2. In Vercel Project Settings, set Environment Variables:
-   - `TG_BOT_TOKEN`: Bot token from `@BotFather`.
-   - `TG_CHAT_ID`: Telegram channel ID.
-   - `CF_DOMAIN`: Your Cloudflare Worker domain (e.g. `media-hosting.dhyeyp254.workers.dev`).
-   - `CF_USERNAME`: `admin` (or your worker username).
-   - `CF_PASSWORD`: Your worker password.
-3. Set your Telegram bot webhook to:
-   `https://<your-vercel-app>.vercel.app/webhook`
-4. Send any file or media to your Telegram bot; it will upload it to your Cloudflare hosting engine and reply with the direct link!
+For questions, enterprise plans, or to request a Developer API key:
+- **Email**: [dhyeyhosts@gmail.com](mailto:dhyeyhosts@gmail.com)
+- **Request Key Portal**: [https://media-hosting.dhyeyp254.workers.dev/request-api](https://media-hosting.dhyeyp254.workers.dev/request-api)
+- **Enterprise Inquiry**: [https://media-hosting.dhyeyp254.workers.dev/contact](https://media-hosting.dhyeyp254.workers.dev/contact)
 
 ---
 
 ## 📄 License
 
-MIT License.
+This project is licensed under the [MIT License](LICENSE).

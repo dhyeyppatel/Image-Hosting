@@ -5,1140 +5,1671 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
+          'Access-Control-Max-Age': '86400',
         }
       });
     }
-    
-    const response = await this.handleRequest(request, env);
-    const newResponse = new Response(response.body, response);
-    newResponse.headers.set('Access-Control-Allow-Origin', '*');
-    return newResponse;
+
+    try {
+      const response = await this.handleRequest(request, env);
+      const newResponse = new Response(response.body, response);
+      newResponse.headers.set('Access-Control-Allow-Origin', '*');
+      return newResponse;
+    } catch (err) {
+      console.error('Unhandled Worker Exception:', err);
+      return new Response(JSON.stringify({ success: false, error: 'Internal Server Error', details: err.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
   },
 
   async handleRequest(request, env) {
-    const { pathname } = new URL(request.url);
-    const domain = env.DOMAIN;
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+    const domain = env.DOMAIN || url.host;
     const DATABASE = env.DATABASE;
-    const USERNAME = env.USERNAME;
-    const PASSWORD = env.PASSWORD;
+    const USERNAME = env.USERNAME || 'admin';
+    const PASSWORD = env.PASSWORD || 'dhyey';
     const adminPath = 'admin';
     const enableAuth = env.ENABLE_AUTH === 'true';
     const TG_BOT_TOKEN = env.TG_BOT_TOKEN;
     const TG_CHAT_ID = env.TG_CHAT_ID;
     const maxSizeMB = env.MAX_SIZE_MB ? parseInt(env.MAX_SIZE_MB, 10) : 20;
     const maxSize = maxSizeMB * 1024 * 1024;
-    const Creator = 'https://t.me/Imagehostssbot';
 
-    switch (pathname) {
-      case '/':
-        return await handleRootRequest(request, USERNAME, PASSWORD, enableAuth);
-      case `/${adminPath}`:
-        return await handleAdminRequest(DATABASE, request, USERNAME, PASSWORD);
-      case '/admin/api/media':
-        return await handleAdminMediaApiRequest(DATABASE, request, USERNAME, PASSWORD);
-      case '/api/register':
-        return request.method === 'POST' ? await handleApiRegisterRequest(request, DATABASE, domain, USERNAME, PASSWORD) : new Response('Method Not Allowed', { status: 405 });
-      case '/upload':
-        return request.method === 'POST' ? await handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) : new Response('Method Not Allowed', { status: 405 });
-      case '/hosturl':
-        return await handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize);
-      case '/docs':
-        return serveDocumentationPage();
-      case '/wallpapers':
-        return handleBingImagesRequest();
-      case '/delete-images':
-        return await handleDeleteImagesRequest(request, DATABASE, USERNAME, PASSWORD);
-      default:
-        return await handleImageRequest(request, DATABASE, TG_BOT_TOKEN);
+    // Route: Root / Web Interface
+    if (pathname === '/') {
+      return await handleRootRequest(request, USERNAME, PASSWORD, enableAuth, domain);
     }
+
+    // Route: Direct redirect for /v/:id to raw file
+    if (pathname.startsWith('/v/')) {
+      return await handleViewerRedirect(request, DATABASE, domain);
+    }
+
+    // PRIMARY ROUTE: Developer API (POST /api/upload)
+    if (pathname === '/api/upload') {
+      return request.method === 'POST'
+        ? await handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize)
+        : new Response(JSON.stringify({ success: false, error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Optional ImgBB v1 Drop-in API endpoint (POST /api/1/upload)
+    if (pathname === '/api/1/upload') {
+      return request.method === 'POST'
+        ? await handleImgBBApiUpload(request, env, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize)
+        : new Response(JSON.stringify({ status_code: 405, error: { message: 'Method Not Allowed' } }), { status: 405, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Route: ShareX Custom Uploader (.sxcu) Download
+    if (pathname === '/api/sharex') {
+      return handleShareXConfigRequest(request, domain);
+    }
+
+    // Route: File Metadata Info API (GET /api/info?url=...)
+    if (pathname === '/api/info') {
+      return await handleApiInfoRequest(request, DATABASE, domain);
+    }
+
+    // Route: Delete API with delete_token or Admin Auth
+    if (pathname === '/api/delete') {
+      return await handleApiDeleteRequest(request, DATABASE, USERNAME, PASSWORD);
+    }
+
+    // Route: Telegram Bot Media Registration (from Vercel webhook)
+    if (pathname === '/api/register') {
+      return request.method === 'POST'
+        ? await handleApiRegisterRequest(request, DATABASE, domain, USERNAME, PASSWORD)
+        : new Response('Method Not Allowed', { status: 405 });
+    }
+
+    // Route: Form Upload (POST /upload)
+    if (pathname === '/upload') {
+      return request.method === 'POST'
+        ? await handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize)
+        : new Response('Method Not Allowed', { status: 405 });
+    }
+
+    // Route: Remote URL Ingestion (SSRF Hardened)
+    if (pathname === '/hosturl') {
+      return await handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize);
+    }
+
+    // Route: Developer API Documentation
+    if (pathname === '/docs') {
+      return serveDocumentationPage(domain);
+    }
+
+    // Route: Curated Wallpapers Feed
+    if (pathname === '/wallpapers') {
+      return handleBingImagesRequest(request);
+    }
+
+    // Routes: Admin Dashboard & APIs
+    if (pathname === `/${adminPath}`) {
+      return await handleAdminRequest(DATABASE, request, USERNAME, PASSWORD, domain);
+    }
+    if (pathname === '/admin/api/media') {
+      return await handleAdminMediaApiRequest(DATABASE, request, USERNAME, PASSWORD);
+    }
+    if (pathname === '/admin/api/keys') {
+      if (request.method === 'GET') {
+        return await handleAdminListKeys(DATABASE, request, USERNAME, PASSWORD);
+      } else if (request.method === 'POST') {
+        return await handleAdminCreateKey(DATABASE, request, USERNAME, PASSWORD);
+      } else if (request.method === 'DELETE') {
+        return await handleAdminDeleteKey(DATABASE, request, USERNAME, PASSWORD);
+      }
+      return new Response('Method Not Allowed', { status: 405 });
+    }
+    if (pathname === '/delete-images') {
+      return await handleDeleteImagesRequest(request, DATABASE, USERNAME, PASSWORD);
+    }
+
+    // Default: Direct Media Delivery & Streaming
+    return await handleImageRequest(request, DATABASE, TG_BOT_TOKEN);
   }
 };
 
-async function serveDocumentationPage() {
-  const html = `
-  <html lang="en"><head>
-  <meta charset="UTF-8">
-  <meta name="description" content="CommonThread API Documentation - Free image and video hosting service with Telegram integration">
-  <meta name="keywords" content="CommonThread, API, image hosting, video hosting, Media hosting, Telegram bot, cloud storage">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>API Documentation - CommonThread</title>
-  <link rel="manifest" href="https://raw.githubusercontent.com/Itz-CommonThread/TG-MediaHost-Bot/main/Files/manifest.json">
-  <link rel="icon" type="image/png" href="https://api.iconify.design/lucide:link.svg">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"></noscript>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
-</head>
-
-<body class="min-h-screen antialiased text-zinc-100 selection:bg-orange-400/20 selection:text-orange-200" style="
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
-    background-color:#000;
-    background-attachment: fixed;
-    scroll-behavior: smooth;
-    background-image:
-      radial-gradient(900px 600px at 15% 10%, rgba(251, 113, 133, 0.12), transparent 60%),
-      radial-gradient(900px 600px at 85% 25%, rgba(251, 146, 60, 0.12), transparent 60%),
-      radial-gradient(1100px 700px at 50% 95%, rgba(217, 119, 6, 0.10), transparent 60%);
-  ">
-
-  <!-- Ambient overlay (subtle grain) -->
-  <div class="pointer-events-none fixed inset-0 -z-10 opacity-40" style="background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px); background-size: 32px 32px;">
-  </div>
-
-  <!-- Page Loader -->
-  <div id="page-loader" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md opacity-100 transition-opacity duration-500">
-    <div class="group inline-flex items-center gap-3 rounded-2xl ring-1 ring-white/10 bg-zinc-950/70 px-4 py-3 shadow-2xl shadow-black/60" style="transform: translateZ(0);">
-      <div class="relative">
-        <img src="https://api.iconify.design/lucide:link.svg" alt="CommonThread Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
-        <div class="absolute -inset-2 rounded-full opacity-70 blur-xl" style="background: radial-gradient(circle, rgba(251,146,60,0.35), transparent 60%);">
-        </div>
-      </div>
-      <div class="inline-flex items-center gap-2 text-zinc-200">
-        <span class="iconify h-5 w-5 animate-spin" data-icon="lucide:loader-2" data-inline="false"></span>
-        <span class="text-sm font-medium">Loading</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Scroll Progress -->
-  <div class="fixed left-0 top-0 z-[55] h-0.5 w-full bg-white/5">
-    <div id="scrollbar" class="h-full w-0 bg-gradient-to-r from-orange-300 via-amber-300 to-rose-300" style="box-shadow: 0 0 24px rgba(251,146,60,0.35);"></div>
-  </div>
-
-  <!-- Top Nav -->
-  <header class="fixed inset-x-0 top-0 z-50">
-    <nav id="top-nav" class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6 backdrop-blur-xl border-b border-white/10 transition-all duration-300" style="background: linear-gradient(to bottom, rgba(10,10,10,0.72), rgba(10,10,10,0.55));">
-      <a href="https://media-hosting.dhyeyp254.workers.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
-        <div class="relative">
-          <img src="https://api.iconify.design/lucide:link.svg" alt="CommonThread Logo" class="h-9 w-9 rounded-full ring-1 ring-white/10">
-          <div class="absolute -inset-2 rounded-full opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" style="background: radial-gradient(circle, rgba(251,146,60,0.45), transparent 60%);">
-          </div>
-        </div>
-        <span class="text-lg font-semibold tracking-tight bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
-          CommonThread
-        </span>
-      </a>
-
-      <div class="hidden md:flex items-center gap-6">
-        <a href="#api" class="text-sm font-medium text-zinc-300 hover:text-orange-200 hover:underline underline-offset-4 decoration-white/15 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-lg px-1.5 py-1">API Docs</a>
-        <a href="#telegram" class="text-sm font-medium text-zinc-300 hover:text-orange-200 hover:underline underline-offset-4 decoration-white/15 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-lg px-1.5 py-1">Telegram Bot</a>
-        <a href="#about" class="text-sm font-medium text-zinc-300 hover:text-orange-200 hover:underline underline-offset-4 decoration-white/15 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-lg px-1.5 py-1">About</a>
-      </div>
-
-      <div class="hidden md:flex items-center gap-3">
-        <a href="https://t.me/Imagehostssbot" target="_blank" class="group inline-flex items-center gap-2 rounded-full px-4 py-2 text-zinc-950 font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-          <span class="iconify h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" data-icon="lucide:send" data-inline="false"></span>
-          <span>Upload via Bot</span>
-        </a>
-      </div>
-
-      <button id="menu-toggle" class="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30" aria-label="Open navigation menu" aria-expanded="false">
-        <span class="iconify h-5 w-5" data-icon="lucide:menu" data-inline="false"></span>
-      </button>
-    </nav>
-  </header>
-
-  <!-- Mobile Menu -->
-  <div id="mobile-nav" class="fixed inset-0 z-40 hidden">
-    <div id="mobile-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-md opacity-0 transition-opacity duration-300"></div>
-
-    <div class="relative mx-auto max-w-sm px-4 pt-20">
-      <div id="mobile-panel" class="rounded-2xl border border-white/10 bg-zinc-950/80 ring-1 ring-white/10 divide-y divide-white/10 opacity-0 translate-y-2 transition-all duration-300 shadow-2xl shadow-black/60" style="transform: translateZ(0);">
-        <div class="p-4">
-          <a href="https://media-hosting.dhyeyp254.workers.dev/" class="group inline-flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded-xl">
-            <img src="https://api.iconify.design/lucide:link.svg" alt="CommonThread Logo" class="h-8 w-8 rounded-full ring-1 ring-white/10">
-            <span class="text-base font-semibold tracking-tight bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
-              CommonThread
-            </span>
-          </a>
-        </div>
-
-        <div class="p-2">
-          <a href="#api" class="mobile-link block rounded-xl px-4 py-3 text-zinc-100 hover:text-orange-200 hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">API Docs</a>
-          <a href="#telegram" class="mobile-link block rounded-xl px-4 py-3 text-zinc-100 hover:text-orange-200 hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">Telegram Bot</a>
-          <a href="#about" class="mobile-link block rounded-xl px-4 py-3 text-zinc-100 hover:text-orange-200 hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">About</a>
-        </div>
-
-        <div class="p-4">
-          <a href="https://t.me/Imagehostssbot" target="_blank" class="mobile-link inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-zinc-950 font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-            <span class="iconify h-4 w-4" data-icon="lucide:send" data-inline="false"></span>
-            <span>Upload via Bot</span>
-          </a>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Floating action: Back to top -->
-  <button id="to-top" class="fixed bottom-5 right-5 z-40 hidden items-center gap-2 rounded-full px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-white/10 bg-zinc-950/60 backdrop-blur-md shadow-lg shadow-black/50 hover:bg-zinc-950/75 hover:text-orange-200 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30">
-    <span class="iconify h-4 w-4" data-icon="lucide:arrow-up" data-inline="false"></span>
-    Top
-  </button>
-
-  <main class="pt-24">
-    <!-- Hero -->
-    <section class="mx-auto max-w-4xl px-4 text-center md:px-6" data-reveal="">
-      <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-orange-200 ring-1 ring-orange-300/20 bg-orange-500/10">
-        <span class="iconify h-3.5 w-3.5" data-icon="lucide:sparkles" data-inline="false"></span>
-        <span>CommonThread</span>
-      </div>
-
-      <h1 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl bg-gradient-to-r from-orange-200 via-amber-200 to-rose-200 bg-clip-text text-transparent">
-        CommonThread API Documentation
-      </h1>
-
-      <p class="mt-4 text-sm text-zinc-400 sm:text-base">
-        Free, fast, and reliable media hosting service with Telegram integration. Upload images and videos directly or via URL with our simple API.
-      </p>
-
-      <div class="mt-6 flex flex-wrap justify-center gap-3">
-        <a href="#api" class="group inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-zinc-950 font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-          <span class="iconify h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" data-icon="lucide:code-2" data-inline="false"></span>
-          <span>View API Docs</span>
-        </a>
-
-        <a href="https://t.me/Imagehostssbot" target="_blank" class="group inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2.5 text-zinc-100 font-medium ring-1 ring-white/10 hover:bg-white/8 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30">
-          <span class="iconify h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" data-icon="lucide:send" data-inline="false"></span>
-          <span>Try Telegram Bot</span>
-        </a>
-      </div>
-
-      <div class="mt-8 mx-auto max-w-3xl rounded-2xl border border-white/10 bg-white/[0.03] ring-1 ring-white/10 backdrop-blur-md p-4 sm:p-5 text-left" style="box-shadow: 0 20px 80px rgba(0,0,0,0.65);">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex items-center gap-2 text-sm text-zinc-300">
-            <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:link" data-inline="false"></span>
-            <span class="font-medium text-zinc-100">Quick Start:</span>
-            <span class="text-zinc-400">Upload a file with</span>
-            <code class="rounded bg-black/60 px-2 py-0.5 text-xs text-orange-200 ring-1 ring-white/10">POST /upload</code>
-          </div>
-          <a href="#api" class="text-sm font-medium text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">Jump to endpoints</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Feature Cards -->
-    <section class="mx-auto mt-10 max-w-6xl px-4 md:px-6">
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div class="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 ring-1 ring-white/10 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.05]" style="box-shadow: 0 20px 80px rgba(0,0,0,0.35);" data-reveal="">
-          <div class="flex flex-col items-center text-center">
-            <div class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl ring-1 ring-orange-300/20 bg-orange-500/10 text-orange-200 transition-transform duration-300 group-hover:scale-105">
-              <span class="iconify h-6 w-6" data-icon="lucide:zap" data-inline="false"></span>
-            </div>
-            <h4 class="text-lg font-medium text-white">Fast Uploads</h4>
-            <p class="mt-2 text-sm text-zinc-400">Upload and retrieve your media files in seconds with our optimized infrastructure.</p>
-          </div>
-        </div>
-
-        <div class="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 ring-1 ring-white/10 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.05]" style="box-shadow: 0 20px 80px rgba(0,0,0,0.35);" data-reveal="">
-          <div class="flex flex-col items-center text-center">
-            <div class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl ring-1 ring-orange-300/20 bg-orange-500/10 text-orange-200 transition-transform duration-300 group-hover:scale-105">
-              <span class="iconify h-6 w-6" data-icon="lucide:shield" data-inline="false"></span>
-            </div>
-            <h4 class="text-lg font-medium text-white">Secure Storage</h4>
-            <p class="mt-2 text-sm text-zinc-400">Your files are stored securely using Telegram's robust cloud storage infrastructure.</p>
-          </div>
-        </div>
-
-        <div class="group rounded-2xl border border-white/10 bg-white/[0.03] p-6 ring-1 ring-white/10 transition-all duration-300 hover:-translate-y-1 hover:bg-white/[0.05]" style="box-shadow: 0 20px 80px rgba(0,0,0,0.35);" data-reveal="">
-          <div class="flex flex-col items-center text-center">
-            <div class="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl ring-1 ring-orange-300/20 bg-orange-500/10 text-orange-200 transition-transform duration-300 group-hover:scale-105">
-              <span class="iconify h-6 w-6" data-icon="lucide:bot" data-inline="false"></span>
-            </div>
-            <h4 class="text-lg font-medium text-white">Telegram Integration</h4>
-            <p class="mt-2 text-sm text-zinc-400">Upload files directly from Telegram using our dedicated bot for seamless integration.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- API Docs -->
-    <section id="api" class="scroll-mt-24 mx-auto mt-10 max-w-6xl px-4 md:px-6">
-      <div class="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl ring-1 ring-white/10 shadow-2xl shadow-black/60" style="transform: translateZ(0);" data-reveal="">
-        <div class="p-6 sm:p-8">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">API Documentation</h2>
-              <div class="mt-2 inline-flex items-center gap-2 text-sm text-zinc-400">
-                <span class="iconify h-4 w-4" data-icon="lucide:clock" data-inline="false"></span>
-                <span><span class="font-medium text-zinc-300">Last Updated:</span> July 20, 2025</span>
-              </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2">
-              <button id="expand-all" class="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-white/10 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">
-                <span class="iconify h-4 w-4" data-icon="lucide:unfold-vertical" data-inline="false"></span>
-                Expand all
-              </button>
-              <button id="collapse-all" class="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-xs font-medium text-zinc-200 ring-1 ring-white/10 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">
-                <span class="iconify h-4 w-4" data-icon="lucide:fold-vertical" data-inline="false"></span>
-                Collapse all
-              </button>
-            </div>
-          </div>
-
-          <p class="mt-4 text-sm text-zinc-300 sm:text-base">
-            This documentation provides a comprehensive guide on how to use the <span class="font-medium">CommonThread API</span> to upload media files to the platform.
-          </p>
-
-          <!-- Endpoints -->
-          <div class="mt-6 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
-            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#endpoints-panel" aria-expanded="true">
-              <div class="flex items-center gap-2">
-                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:route" data-inline="false"></span>
-                <h3 class="text-lg font-medium text-amber-200">Endpoints</h3>
-              </div>
-              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
-            </button>
-            <div id="endpoints-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
-              <ul class="mt-1 space-y-2 text-zinc-300">
-                <li class="text-sm">
-                  <span class="font-medium text-white">POST</span>
-                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">/upload</code>
-                  - Direct file upload via form data.
-                </li>
-                <li class="text-sm">
-                  <span class="font-medium text-white">GET</span>
-                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">/hosturl?url=[media_url]</code>
-                  - Uploads media from a specified URL.
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Base URLs -->
-          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
-            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#baseurls-panel" aria-expanded="true">
-              <div class="flex items-center gap-2">
-                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:globe" data-inline="false"></span>
-                <h3 class="text-lg font-medium text-amber-200">Base URLs</h3>
-              </div>
-              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
-            </button>
-            <div id="baseurls-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
-              <ul class="mt-1 space-y-2 text-zinc-300">
-                <li class="text-sm">
-                  <span class="font-medium text-white">POST:</span>
-                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://media-hosting.dhyeyp254.workers.dev/upload</code>
-                </li>
-                <li class="text-sm">
-                  <span class="font-medium text-white">GET:</span>
-                  <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">https://media-hosting.dhyeyp254.workers.dev/hosturl?url=[media_url]</code>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- POST Method -->
-          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
-            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#post-panel" aria-expanded="true">
-              <div class="flex items-center gap-2">
-                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:upload" data-inline="false"></span>
-                <h3 class="text-lg font-medium text-amber-200">POST Method</h3>
-              </div>
-              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
-            </button>
-            <div id="post-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
-              <p class="mt-1 text-sm text-zinc-300 sm:text-base">
-                Uploads a media file (image, video, or any other type of media) directly using multipart/form-data. This method is ideal for client-side form submissions.
-              </p>
-              <p class="mt-2 text-sm text-zinc-300 sm:text-base">
-                <span class="font-medium">Header:</span>
-                <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">Content-Type: multipart/form-data</code>
-                (Required)
-              </p>
-
-              <h4 class="mt-4 text-base font-medium text-white">Form Data Parameters</h4>
-              <div class="mt-2 overflow-x-auto rounded-xl ring-1 ring-white/10 border border-white/10">
-                <table class="min-w-[720px] w-full text-left text-sm">
-                  <thead class="text-zinc-100" style="background: linear-gradient(90deg, rgba(251,146,60,0.22), rgba(244,63,94,0.16));">
-                    <tr>
-                      <th class="px-4 py-3 font-medium">Parameter</th>
-                      <th class="px-4 py-3 font-medium">Type</th>
-                      <th class="px-4 py-3 font-medium">Required</th>
-                      <th class="px-4 py-3 font-medium">Description</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-white/10">
-                    <tr class="bg-white/[0.03]">
-                      <td class="px-4 py-3">
-                        <code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">file</code>
-                      </td>
-                      <td class="px-4 py-3 text-zinc-300">file</td>
-                      <td class="px-4 py-3 text-zinc-300">Yes</td>
-                      <td class="px-4 py-3 text-zinc-300">The media file to be uploaded (image, video, or any other type of media). Must not exceed 20MB in size.</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <h4 class="mt-6 text-base font-medium text-white">Usage Example (cURL)</h4>
-              <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-code">curl -X POST https://media-hosting.dhyeyp254.workers.dev/upload \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@path/to/your/file.jpg"</code></pre>
-                <button data-copy="#bash-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
-                  Copy
-                </button>
-              </div>
-
-              <h4 class="mt-6 text-base font-medium text-white">Usage Example (JavaScript - Fetch API)</h4>
-              <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="js-code">const fileInput = document.querySelector('input[type="file"]');
-  const formData = new FormData();
-  formData.append('file', fileInput.files[0]);
-
-  fetch('https://media-hosting.dhyeyp254.workers.dev/upload', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response =&gt; response.json())
-  .then(data =&gt; console.log(data))
-  .catch(error =&gt; console.error('Error:', error));</code></pre>
-                <button data-copy="#js-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
-                  Copy
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- GET Method -->
-          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
-            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#get-panel" aria-expanded="true">
-              <div class="flex items-center gap-2">
-                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:download" data-inline="false"></span>
-                <h3 class="text-lg font-medium text-amber-200">GET Method</h3>
-              </div>
-              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
-            </button>
-            <div id="get-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
-              <p class="mt-1 text-sm text-zinc-300 sm:text-base">
-                Fetches and uploads media from a provided URL. This method is suitable for uploading media files already hosted online.
-              </p>
-              <p class="mt-2 text-sm text-zinc-300 sm:text-base">
-                <span class="font-medium">Usage:</span>
-                <code class="mx-1 rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">GET /hosturl?url=[media_url]</code>
-              </p>
-
-              <h4 class="mt-4 text-base font-medium text-white">Parameters</h4>
-              <div class="mt-2 overflow-x-auto rounded-xl ring-1 ring-white/10 border border-white/10">
-                <table class="min-w-[720px] w-full text-left text-sm">
-                  <thead class="text-zinc-100" style="background: linear-gradient(90deg, rgba(251,146,60,0.22), rgba(244,63,94,0.16));">
-                    <tr>
-                      <th class="px-4 py-3 font-medium">Parameter</th>
-                      <th class="px-4 py-3 font-medium">Type</th>
-                      <th class="px-4 py-3 font-medium">Required</th>
-                      <th class="px-4 py-3 font-medium">Description</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-white/10">
-                    <tr class="bg-white/[0.03]">
-                      <td class="px-4 py-3">
-                        <code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">url</code>
-                      </td>
-                      <td class="px-4 py-3 text-zinc-300">string</td>
-                      <td class="px-4 py-3 text-zinc-300">Yes</td>
-                      <td class="px-4 py-3 text-zinc-300">The URL of the media file to upload (image or video, max 20MB).</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <h4 class="mt-6 text-base font-medium text-white">Usage Example</h4>
-              <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="bash-get-code">https://media-hosting.dhyeyp254.workers.dev/hosturl?url=https://example.com/path/to/media.jpg</code></pre>
-                <button data-copy="#bash-get-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
-                  Copy
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Responses -->
-          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
-            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#responses-panel" aria-expanded="true">
-              <div class="flex items-center gap-2">
-                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:braces" data-inline="false"></span>
-                <h3 class="text-lg font-medium text-amber-200">Response Formats</h3>
-              </div>
-              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
-            </button>
-
-            <div id="responses-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
-              <h3 class="mt-2 text-lg font-medium text-amber-200">Response Format (Success)</h3>
-              <p class="mt-2 text-sm text-zinc-300 sm:text-base">A successful upload will return a JSON object with the following details:</p>
-              <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="success-response-code">{
-    "data": "https://media-hosting.dhyeyp254.workers.dev/1753020712833.png",
-    "url": "https://media-hosting.dhyeyp254.workers.dev/1753020712833.png",
-    "filename": "2nNV2I4.png",
-    "size": 83638,
-    "uploaded_on": "2025-07-20T14:11:52.833Z",
-    "media_type": "image/png",
-    "creator": "https://t.me/Imagehostssbot"
-  }</code></pre>
-                <button data-copy="#success-response-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
-                  Copy
-                </button>
-              </div>
-
-              <ul class="mt-3 space-y-1 text-sm text-zinc-300">
-                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">data</code>: The direct URL of the uploaded media file.</li>
-                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">url</code>: (Alias for <code class="rounded bg-orange-500/15 px-1 py-0.5 text-orange-200 ring-1 ring-orange-300/10">data</code>) The direct URL of the uploaded media file.</li>
-                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">filename</code>: The original filename of the uploaded media.</li>
-                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">size</code>: The size of the uploaded file in bytes.</li>
-                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">uploaded_on</code>: The timestamp when the file was uploaded (ISO 8601 format).</li>
-                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">media_type</code>: The MIME type of the uploaded media (e.g., 'image/png', 'video/mp4').</li>
-                <li><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">creator</code>: A link to the creator's Telegram channel.</li>
-              </ul>
-
-              <h3 class="mt-8 text-lg font-medium text-amber-200">Response Format (Error)</h3>
-              <p class="mt-2 text-sm text-zinc-300 sm:text-base">
-                In case of an error, especially with the <code class="rounded bg-orange-500/15 px-1 py-0.5 text-orange-200 ring-1 ring-orange-300/10">url</code> parameter for the GET method, an error JSON object will be returned:
-              </p>
-              <div class="relative mt-2">
-                <pre class="rounded-xl bg-black/55 p-4 text-orange-100 ring-1 ring-white/10 overflow-x-auto text-xs sm:text-sm" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);"><code id="error-response-code">{
-    "error": "Failed to download file from URL"
-  }</code></pre>
-                <button data-copy="#error-response-code" class="copy-btn absolute top-2 right-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-950 ring-1 ring-white/10 shadow-sm shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-                  <span class="iconify h-3.5 w-3.5" data-icon="lucide:copy" data-inline="false"></span>
-                  Copy
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Notes -->
-          <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 ring-1 ring-white/10">
-            <button class="section-toggle w-full flex items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4" data-target="#notes-panel" aria-expanded="true">
-              <div class="flex items-center gap-2">
-                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:sticky-note" data-inline="false"></span>
-                <h3 class="text-lg font-medium text-amber-200">Notes</h3>
-              </div>
-              <span class="iconify chevron h-4 w-4 text-zinc-300 transition-transform duration-300" data-icon="lucide:chevron-down" data-inline="false"></span>
-            </button>
-            <div id="notes-panel" class="section-panel px-4 pb-4 sm:px-5 sm:pb-5">
-              <ul class="mt-1 space-y-2 text-sm text-zinc-300">
-                <li><span class="font-medium">POST Method:</span> Best for uploading files directly from user input (e.g., via an HTML form).</li>
-                <li><span class="font-medium">GET Method:</span> Ideal for programmatically uploading files that are already accessible via a public URL.</li>
-                <li>All uploaded media is subject to a <span class="font-medium text-white">20MB file size limit</span>.</li>
-              </ul>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </section>
-
-    <!-- Telegram -->
-    <section id="telegram" class="scroll-mt-24 mx-auto mt-10 max-w-6xl px-4 md:px-6">
-      <div class="rounded-3xl border border-orange-300/15 bg-white/[0.03] ring-1 ring-white/10 shadow-2xl shadow-black/55" style="transform: translateZ(0);" data-reveal="">
-        <div class="p-6 sm:p-8">
-          <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">Telegram Bot Integration</h2>
-          <p class="mt-3 text-sm text-zinc-300 sm:text-base">
-            Now you can directly upload media to CommonThread using our dedicated Telegram bot
-            <strong><a href="https://t.me/Imagehostssbot" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">@Imagehostssbot</a></strong>.
-            This offers a convenient way to host files without needing to interact directly with the API.
-          </p>
-
-          <h3 class="mt-6 text-lg font-medium text-amber-200">How to Use the Telegram Bot</h3>
-          <ol class="mt-2 list-decimal pl-5 space-y-2 text-sm text-zinc-300 sm:text-base">
-            <li>Start a chat with <a href="https://t.me/Imagehostssbot" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">@Imagehostssbot</a> on Telegram.</li>
-            <li><strong class="text-white">Direct File Upload:</strong> Send any image, video, or media file directly to the bot.</li>
-            <li><strong class="text-white">URL Upload:</strong> Alternatively, send a URL containing a media file. Our bot will automatically download and upload it for you.</li>
-            <li>The bot will process your request and return the direct CommonThread URL for your uploaded media.</li>
-          </ol>
-
-          <h3 class="mt-6 text-lg font-medium text-amber-200">Bot Commands</h3>
-          <div class="mt-2 overflow-x-auto rounded-xl ring-1 ring-white/10 border border-white/10">
-            <table class="min-w-[560px] w-full text-left text-sm">
-              <thead class="text-zinc-100" style="background: linear-gradient(90deg, rgba(251,146,60,0.22), rgba(244,63,94,0.16));">
-                <tr>
-                  <th class="px-4 py-3 font-medium">Command</th>
-                  <th class="px-4 py-3 font-medium">Description</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-white/10">
-                <tr class="bg-white/[0.03]">
-                  <td class="px-4 py-3"><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">/start</code></td>
-                  <td class="px-4 py-3 text-zinc-300">Get a welcome message and basic instructions.</td>
-                </tr>
-                <tr class="bg-white/[0.03]">
-                  <td class="px-4 py-3"><code class="rounded bg-orange-500/15 px-1.5 py-0.5 text-orange-200 ring-1 ring-orange-300/10">/help</code></td>
-                  <td class="px-4 py-3 text-zinc-300">Show detailed help information and available features.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="mt-6 flex flex-wrap gap-3">
-            <a href="https://t.me/Imagehostssbot" target="_blank" class="group inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-zinc-950 font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background: linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1));">
-              <span class="iconify h-4 w-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" data-icon="lucide:send" data-inline="false"></span>
-              <span>Start Using the Bot</span>
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- About -->
-    <section id="about" class="scroll-mt-24 mx-auto mt-10 mb-16 max-w-6xl px-4 md:px-6">
-      <div class="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl ring-1 ring-white/10 shadow-2xl shadow-black/55" style="transform: translateZ(0);" data-reveal="">
-        <div class="p-6 sm:p-8">
-          <h2 class="text-2xl font-semibold tracking-tight text-orange-200 sm:text-3xl">About Us</h2>
-          <div class="mt-3 space-y-3 text-sm text-zinc-300 sm:text-base">
-            <p>Welcome to <strong class="text-white">CommonThread</strong> — your trusted platform for free image, video, and general media hosting. Designed with an emphasis on <strong class="text-white">simplicity, speed, and security</strong>, CommonThread offers a seamless and efficient experience for uploading and sharing your digital content. Developed by <strong class="text-white">CommonThread</strong>, our service is built on a foundation of robust privacy protections to ensure your data remains safe and secure.</p>
-            <p>Our platform leverages Telegram's cutting-edge cloud storage infrastructure, providing you with reliable and easily accessible media storage, whenever and wherever you need it.</p>
-            <p><strong class="text-white">About CommonThread:</strong> CommonThread is a dynamic Telegram channel managed by Aarabh (known as CommonThread Team), who specializes in developing advanced Telegram bots, powerful APIs, and innovative web applications. You can explore all the latest tools, projects, and updates directly on their Telegram channel: <a href="https://t.me/Imagehostssbot" target="_blank" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">CommonThread</a>.</p>
-            <p><strong class="text-white">Disclaimer:</strong> CommonThread is an independent project created solely for educational and demonstrative purposes and is not affiliated with or endorsed by Telegram. Users are solely responsible for the content they upload; CommonThread does not claim any rights over user-uploaded media. By using our platform, users agree that they retain all responsibility for compliance with relevant copyright laws and regulations.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- Footer -->
-  <footer class="border-t border-white/10">
-    <div class="mx-auto max-w-7xl px-4 py-6 md:px-6">
-      <div class="flex flex-col items-center gap-3">
-        <p class="text-sm text-zinc-400 text-center">
-          © 2025 CommonThread. All rights reserved. Developed by
-          <a href="https://t.me/Imagehostssbot" target="_blank" class="text-orange-200 hover:text-orange-100 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 rounded">
-            CommonThread
-          </a>.
-        </p>
-
-        <div class="inline-flex items-center gap-4">
-          <a href="https://t.me/Imagehostssbot" target="_blank" aria-label="Telegram Channel" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
-            <span class="iconify h-5 w-5" data-icon="lucide:send" data-inline="false"></span>
-          </a>
-
-          <a href="https://media-hosting.dhyeyp254.workers.dev" target="_blank" aria-label="GitHub Profile" class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-white/10 hover:ring-orange-300/30 hover:text-orange-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30 bg-white/[0.02]">
-            <span class="iconify h-5 w-5" data-icon="lucide:github" data-inline="false"></span>
-          </a>
-        </div>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      const menuBtn = document.getElementById('menu-toggle');
-      const mobileNav = document.getElementById('mobile-nav');
-      const mobileBackdrop = document.getElementById('mobile-backdrop');
-      const mobilePanel = document.getElementById('mobile-panel');
-      const loader = document.getElementById('page-loader');
-      const nav = document.getElementById('top-nav');
-      const toTop = document.getElementById('to-top');
-      const scrollbar = document.getElementById('scrollbar');
-
-      // Header scroll state + progress
-      const onScroll = () => {
-        const y = window.scrollY || 0;
-
-        if (y > 10) {
-          nav.classList.add('shadow-lg','shadow-black/40');
-          nav.style.background = 'linear-gradient(to bottom, rgba(0,0,0,0.82), rgba(0,0,0,0.58))';
-        } else {
-          nav.classList.remove('shadow-lg','shadow-black/40');
-          nav.style.background = 'linear-gradient(to bottom, rgba(10,10,10,0.72), rgba(10,10,10,0.55))';
-        }
-
-        const doc = document.documentElement;
-        const scrollTop = doc.scrollTop || document.body.scrollTop;
-        const height = (doc.scrollHeight - doc.clientHeight) || 1;
-        const progress = Math.max(0, Math.min(1, scrollTop / height));
-        if (scrollbar) scrollbar.style.width = (progress * 100).toFixed(2) + '%';
-
-        if (toTop) {
-          if (y > 700) toTop.classList.remove('hidden');
-          else toTop.classList.add('hidden');
-        }
-      };
-      onScroll();
-      window.addEventListener('scroll', onScroll, { passive: true });
-
-      if (toTop) {
-        toTop.addEventListener('click', () => {
-          window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
-        });
-      }
-
-      // Mobile menu open/close with transitions
-      const setMenuIcon = (name) => {
-        menuBtn.innerHTML = '<span class="iconify h-5 w-5" data-icon="lucide:' + name + '" data-inline="false"></span>';
-      };
-
-      const openMenu = () => {
-        mobileNav.classList.remove('hidden');
-        requestAnimationFrame(() => {
-          mobileBackdrop.classList.remove('opacity-0');
-          mobileBackdrop.classList.add('opacity-100');
-          mobilePanel.classList.remove('opacity-0','translate-y-2');
-          mobilePanel.classList.add('opacity-100','translate-y-0');
-        });
-        setMenuIcon('x');
-        menuBtn.setAttribute('aria-expanded', 'true');
-        document.body.classList.add('overflow-hidden');
-      };
-
-      const closeMenu = () => {
-        mobileBackdrop.classList.add('opacity-0');
-        mobileBackdrop.classList.remove('opacity-100');
-        mobilePanel.classList.add('opacity-0','translate-y-2');
-        mobilePanel.classList.remove('opacity-100','translate-y-0');
-        setTimeout(() => {
-          mobileNav.classList.add('hidden');
-        }, 250);
-        setMenuIcon('menu');
-        menuBtn.setAttribute('aria-expanded', 'false');
-        document.body.classList.remove('overflow-hidden');
-      };
-
-      menuBtn.addEventListener('click', () => {
-        const isHidden = mobileNav.classList.contains('hidden');
-        isHidden ? openMenu() : closeMenu();
-      });
-
-      mobileBackdrop.addEventListener('click', closeMenu);
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !mobileNav.classList.contains('hidden')) closeMenu();
-      });
-
-      document.querySelectorAll('.mobile-link').forEach(el => {
-        el.addEventListener('click', () => closeMenu());
-      });
-
-      // Copy buttons (animated state)
-      function bindCopyButtons() {
-        document.querySelectorAll('button[data-copy]').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const selector = btn.getAttribute('data-copy');
-            const el = document.querySelector(selector);
-            if (!el) return;
-
-            const text = (el.textContent || '').trim();
-
-            try {
-              await navigator.clipboard.writeText(text);
-              const original = btn.innerHTML;
-              btn.innerHTML = '<span class="iconify h-3.5 w-3.5" data-icon="lucide:check" data-inline="false"></span>Copied';
-              btn.style.background = 'linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1))';
-
-              if (!reducedMotion) {
-                btn.animate(
-                  [{ transform: 'translateY(0)' }, { transform: 'translateY(-2px)' }, { transform: 'translateY(0)' }],
-                  { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' }
-                );
-              }
-
-              setTimeout(() => {
-                btn.innerHTML = original;
-                btn.style.background = 'linear-gradient(90deg, rgba(251,146,60,1), rgba(253,186,116,1))';
-              }, 1300);
-            } catch (e) {}
-          });
-        });
-      }
-      bindCopyButtons();
-
-      // Reveal-on-scroll (accessible)
-      const revealEls = document.querySelectorAll('[data-reveal]');
-      revealEls.forEach((el, idx) => {
-        el.classList.add('opacity-0','translate-y-4','transition-all','duration-700');
-        el.style.transitionDelay = Math.min(idx * 70, 280) + "ms";
-      });
-
-      if (reducedMotion) {
-        revealEls.forEach((el) => {
-          el.classList.remove('opacity-0','translate-y-4');
-          el.style.transitionDelay = '0ms';
-        });
-      } else {
-        const io = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              entry.target.classList.remove('opacity-0','translate-y-4');
-              io.unobserve(entry.target);
-            }
-          });
-        }, { threshold: 0.12 });
-        revealEls.forEach(el => io.observe(el));
-      }
-
-      // Collapsible sections
-      const toggles = Array.from(document.querySelectorAll('.section-toggle'));
-      const setExpanded = (btn, expanded) => {
-        const targetSel = btn.getAttribute('data-target');
-        const panel = document.querySelector(targetSel);
-        const chevron = btn.querySelector('.chevron');
-        if (!panel) return;
-
-        btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-
-        if (expanded) {
-          panel.classList.remove('hidden');
-          if (chevron) chevron.classList.add('rotate-180');
-          if (!reducedMotion) {
-            panel.animate(
-              [{ opacity: 0, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'translateY(0)' }],
-              { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' }
-            );
-          }
-        } else {
-          if (!reducedMotion) {
-            const a = panel.animate(
-              [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-4px)' }],
-              { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' }
-            );
-            a.onfinish = () => panel.classList.add('hidden');
-          } else {
-            panel.classList.add('hidden');
-          }
-          if (chevron) chevron.classList.remove('rotate-180');
-        }
-      };
-
-      toggles.forEach(btn => {
-        const targetSel = btn.getAttribute('data-target');
-        const panel = document.querySelector(targetSel);
-        if (!panel) return;
-
-        // default open
-        panel.classList.remove('hidden');
-        btn.querySelector('.chevron')?.classList.add('rotate-180');
-
-        btn.addEventListener('click', () => {
-          const expanded = btn.getAttribute('aria-expanded') === 'true';
-          setExpanded(btn, !expanded);
-        });
-      });
-
-      const expandAll = document.getElementById('expand-all');
-      const collapseAll = document.getElementById('collapse-all');
-      if (expandAll) expandAll.addEventListener('click', () => toggles.forEach(t => setExpanded(t, true)));
-      if (collapseAll) collapseAll.addEventListener('click', () => toggles.forEach(t => setExpanded(t, false)));
-
-      // Loader fade-out on full load
-      window.addEventListener('load', () => {
-        if (!loader) return;
-        if (reducedMotion) {
-          loader.style.display = 'none';
-          return;
-        }
-        loader.classList.add('opacity-0');
-        setTimeout(() => { loader.remove(); }, 420);
-      });
-    });
-  </script>
-
-</body></html>
-  `;
-  return new Response(html, {
-    headers: {
-      "Content-Type": "text/html",
-    },
-  });
+// ==========================================
+// CONSTANTS & MIME TYPE DEFINITIONS
+// ==========================================
+const MIME_TYPES = {
+  // Images
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
+  tiff: 'image/tiff', tif: 'image/tiff', avif: 'image/avif', heic: 'image/heic',
+  // Videos
+  mp4: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime',
+  avi: 'video/x-msvideo', wmv: 'video/x-ms-wmv', flv: 'video/x-flv', m4v: 'video/x-m4v',
+  // Audio
+  mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/m4a',
+  flac: 'audio/flac', aac: 'audio/aac', opus: 'audio/opus',
+  // Documents
+  pdf: 'application/pdf', doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  odt: 'application/vnd.oasis.opendocument.text',
+  // Text & Code
+  txt: 'text/plain; charset=utf-8', md: 'text/markdown; charset=utf-8',
+  json: 'application/json; charset=utf-8', csv: 'text/csv; charset=utf-8',
+  xml: 'application/xml; charset=utf-8', log: 'text/plain; charset=utf-8',
+  html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8',
+  js: 'application/javascript; charset=utf-8', ts: 'text/typescript; charset=utf-8',
+  py: 'text/x-python; charset=utf-8', sh: 'text/x-shellscript; charset=utf-8',
+  bat: 'application/x-bat', cmd: 'application/x-bat', ps1: 'text/plain; charset=utf-8',
+  yaml: 'text/yaml; charset=utf-8', yml: 'text/yaml; charset=utf-8',
+  ini: 'text/plain; charset=utf-8', toml: 'text/plain; charset=utf-8',
+  sql: 'text/plain; charset=utf-8',
+  // Archives
+  zip: 'application/zip', rar: 'application/x-rar-compressed', '7z': 'application/x-7z-compressed',
+  tar: 'application/x-tar', gz: 'application/gzip', bz2: 'application/x-bzip2',
+  // Executables & Binaries
+  exe: 'application/x-msdownload', msi: 'application/x-msdownload',
+  apk: 'application/vnd.android.package-archive', bin: 'application/octet-stream'
+};
+
+const EXECUTABLE_EXTENSIONS = new Set([
+  'html', 'htm', 'xhtml', 'js', 'mjs', 'ts', 'css', 'xml', 'svg',
+  'bat', 'cmd', 'ps1', 'sh', 'bash', 'vbs', 'exe', 'msi', 'bin', 'dll', 'apk', 'jar'
+]);
+
+// ==========================================
+// CORE HELPERS & UTILITIES
+// ==========================================
+function formatBytes(bytes) {
+  if (!bytes || isNaN(bytes) || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function detectMimeType(filename, defaultMime = 'application/octet-stream') {
+  if (!filename) return defaultMime;
+  const ext = filename.split('.').pop().toLowerCase();
+  return MIME_TYPES[ext] || defaultMime || 'application/octet-stream';
+}
+
+function generateSlug() {
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 8);
+  return `${Date.now()}_${randomPart}`;
+}
+
+function isValidCredentials(authHeader, USERNAME, PASSWORD) {
+  if (!authHeader || typeof authHeader !== 'string') return false;
+  try {
+    const parts = authHeader.trim().split(' ');
+    if (parts.length < 2 || parts[0].toLowerCase() !== 'basic') return false;
+    const decoded = atob(parts[1]);
+    const colonIndex = decoded.indexOf(':');
+    if (colonIndex === -1) return false;
+    const user = decoded.substring(0, colonIndex);
+    const pass = decoded.substring(colonIndex + 1);
+    return user === USERNAME && pass === PASSWORD;
+  } catch {
+    return false;
+  }
 }
 
 function authenticate(request, USERNAME, PASSWORD) {
   const authHeader = request.headers.get('Authorization');
-  if (!authHeader) return false;
   return isValidCredentials(authHeader, USERNAME, PASSWORD);
 }
 
-async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth) {
-  const cache = caches.default;
-  const cacheKey = new Request(request.url);
-  if (enableAuth) {
-    if (!authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+async function ensureApiKeysTable(DATABASE) {
+  if (!DATABASE) return;
+  try {
+    await DATABASE.prepare(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        key TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        active INTEGER DEFAULT 1,
+        uploads_count INTEGER DEFAULT 0
+      )
+    `).run();
+  } catch (err) {
+    // Graceful fallback if table exists or DB is read-only
+  }
+}
+
+async function validateApiKey(request, env, extraKey = null) {
+  const DATABASE = env.DATABASE;
+
+  // 1. Collect all env-configured keys (support single or comma-separated tokens)
+  const envKeys = new Set();
+  if (env.API_KEY) {
+    env.API_KEY.split(',').map(k => k.trim()).filter(Boolean).forEach(k => envKeys.add(k));
+  }
+  if (env.API_KEYS) {
+    env.API_KEYS.split(',').map(k => k.trim()).filter(Boolean).forEach(k => envKeys.add(k));
+  }
+
+  // 2. Extract candidate key from request
+  let candidate = extraKey ? String(extraKey).trim() : null;
+  if (!candidate) {
+    const headerKey = request.headers.get('X-API-Key');
+    if (headerKey) candidate = headerKey.trim();
+  }
+  if (!candidate) {
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+      candidate = authHeader.substring(7).trim();
     }
   }
-  const cachedResponse = await cache.match(cacheKey);
-  if (cachedResponse) {
-    return cachedResponse;
+  if (!candidate) {
+    const url = new URL(request.url);
+    const qKey = url.searchParams.get('key') || url.searchParams.get('api_key');
+    if (qKey) candidate = qKey.trim();
   }
-﻿  const response = new Response(`
-<!DOCTYPE html>
+
+  // 3. Match against environment keys
+  if (candidate && envKeys.has(candidate)) {
+    return { valid: true, name: 'Environment Key', key: candidate };
+  }
+
+  // 4. Match against D1 database keys
+  let d1HasKeys = false;
+  if (DATABASE) {
+    try {
+      await ensureApiKeysTable(DATABASE);
+      if (candidate) {
+        const row = await DATABASE.prepare('SELECT key, name, active FROM api_keys WHERE key = ?').bind(candidate).first();
+        if (row && row.active === 1) {
+          // Asynchronously increment upload counter
+          DATABASE.prepare('UPDATE api_keys SET uploads_count = uploads_count + 1 WHERE key = ?').bind(candidate).run().catch(() => {});
+          return { valid: true, name: row.name, key: candidate };
+        }
+      }
+      // Check if any active keys exist in D1
+      const countResult = await DATABASE.prepare('SELECT COUNT(*) as count FROM api_keys WHERE active = 1').first();
+      if (countResult && countResult.count > 0) {
+        d1HasKeys = true;
+      }
+    } catch (err) {
+      console.warn('D1 api_keys lookup error:', err.message);
+    }
+  }
+
+  // 5. Open access check: if NO keys are configured in env and NO keys in D1, allow upload
+  if (envKeys.size === 0 && !d1HasKeys) {
+    return { valid: true, name: 'Open Access (No keys configured)', key: null };
+  }
+
+  // 6. If keys are configured, reject invalid or missing key
+  return {
+    valid: false,
+    error: candidate
+      ? 'Invalid or revoked developer API key'
+      : 'Missing API key. Provide your token via X-API-Key header, Bearer token, or key parameter.'
+  };
+}
+
+function isSafeUrl(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { safe: false, reason: 'Only HTTP and HTTPS protocols are supported.' };
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname === '0.0.0.0' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname === '169.254.169.254' ||
+      hostname === 'metadata.google.internal'
+    ) {
+      return { safe: false, reason: 'Access to internal or loopback hosts is prohibited.' };
+    }
+    const ipMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (ipMatch) {
+      const b1 = parseInt(ipMatch[1], 10);
+      const b2 = parseInt(ipMatch[2], 10);
+      if (b1 === 10) return { safe: false, reason: 'Access to private 10.0.0.0/8 network is prohibited.' };
+      if (b1 === 172 && b2 >= 16 && b2 <= 31) return { safe: false, reason: 'Access to private 172.16.0.0/12 network is prohibited.' };
+      if (b1 === 192 && b2 === 168) return { safe: false, reason: 'Access to private 192.168.0.0/16 network is prohibited.' };
+      if (b1 === 127) return { safe: false, reason: 'Access to loopback 127.0.0.0/8 network is prohibited.' };
+      if (b1 === 169 && b2 === 254) return { safe: false, reason: 'Access to link-local 169.254.0.0/16 network is prohibited.' };
+      if (b1 === 0) return { safe: false, reason: 'Access to 0.0.0.0/8 network is prohibited.' };
+    }
+    return { safe: true, url: parsed };
+  } catch {
+    return { safe: false, reason: 'Invalid URL format.' };
+  }
+}
+
+function base64ToUint8Array(base64Str) {
+  let cleanBase64 = base64Str.trim();
+  let mime = 'application/octet-stream';
+  if (cleanBase64.startsWith('data:')) {
+    const commaIdx = cleanBase64.indexOf(',');
+    if (commaIdx !== -1) {
+      const header = cleanBase64.substring(5, commaIdx);
+      mime = header.split(';')[0] || mime;
+      cleanBase64 = cleanBase64.substring(commaIdx + 1);
+    }
+  }
+  const binaryString = atob(cleanBase64.replace(/\s/g, ''));
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return { bytes, mime };
+}
+
+async function uploadToTelegram(fileBlob, filename, mimeType, TG_BOT_TOKEN, TG_CHAT_ID) {
+  const uploadFormData = new FormData();
+  uploadFormData.append('chat_id', TG_CHAT_ID);
+
+  let tgFileName = filename || 'file.bin';
+  if (mimeType.startsWith('image/gif')) {
+    const newFileName = tgFileName.replace(/\.gif$/i, '.jpeg');
+    const newFile = new File([fileBlob], newFileName, { type: 'image/jpeg' });
+    uploadFormData.append('document', newFile);
+    tgFileName = newFileName;
+  } else {
+    const file = new File([fileBlob], tgFileName, { type: mimeType });
+    uploadFormData.append('document', file);
+  }
+
+  const telegramResponse = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument`, {
+    method: 'POST',
+    body: uploadFormData
+  });
+
+  if (!telegramResponse.ok) {
+    const errorData = await telegramResponse.json().catch(() => ({}));
+    throw new Error(errorData.description || 'Upload to Telegram storage failed');
+  }
+
+  const responseData = await telegramResponse.json();
+  let fileId;
+  if (responseData.result.document) fileId = responseData.result.document.file_id;
+  else if (responseData.result.video) fileId = responseData.result.video.file_id;
+  else if (responseData.result.audio) fileId = responseData.result.audio.file_id;
+  else if (responseData.result.sticker) fileId = responseData.result.sticker.file_id;
+  else if (responseData.result.photo) fileId = responseData.result.photo[responseData.result.photo.length - 1].file_id;
+  else throw new Error('No valid file identifier returned by Telegram');
+
+  let resolvedName = tgFileName;
+  if (responseData.result.document && responseData.result.document.file_name) {
+    resolvedName = responseData.result.document.file_name;
+  } else if (responseData.result.video && responseData.result.video.file_name) {
+    resolvedName = responseData.result.video.file_name;
+  } else if (responseData.result.audio && responseData.result.audio.file_name) {
+    resolvedName = responseData.result.audio.file_name;
+  }
+
+  return { fileId, resolvedName };
+}
+
+async function insertMediaRecord(DATABASE, imageURL, fileId, originalFileName, fileSize, mimeType, timestamp, deleteToken) {
+  try {
+    await DATABASE.prepare(`
+      INSERT INTO media (url, fileId, filename, file_size, mime_type, created_at, delete_token)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(url) DO UPDATE SET fileId = excluded.fileId, filename = excluded.filename
+    `).bind(imageURL, fileId, originalFileName, fileSize, mimeType, timestamp, deleteToken).run();
+  } catch (err) {
+    await DATABASE.prepare(`
+      INSERT INTO media (url, fileId, filename)
+      VALUES (?, ?, ?)
+      ON CONFLICT(url) DO UPDATE SET fileId = excluded.fileId, filename = excluded.filename
+    `).bind(imageURL, fileId, originalFileName).run();
+  }
+}
+
+// ==========================================
+// PRIMARY DEVELOPER API: POST /api/upload
+// ==========================================
+async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
+  try {
+    let fileBuffer;
+    let fileName = 'upload.bin';
+    let mimeType = 'application/octet-stream';
+    let customName = null;
+    let bodyKey = null;
+
+    const contentType = request.headers.get('content-type') || '';
+
+    if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
+      const formData = await request.formData();
+      bodyKey = formData.get('key') || formData.get('api_key') || formData.get('token');
+      const file = formData.get('file') || formData.get('image');
+      customName = formData.get('name');
+
+      const authCheck = await validateApiKey(request, env, bodyKey);
+      if (!authCheck.valid) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: authCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
+        }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (!file) {
+        return new Response(JSON.stringify({ success: false, error: 'Missing "file" field in request' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (typeof file === 'string') {
+        if (file.startsWith('http://') || file.startsWith('https://')) {
+          const safeCheck = isSafeUrl(file);
+          if (!safeCheck.safe) return new Response(JSON.stringify({ success: false, error: safeCheck.reason }), { status: 400 });
+          const fetchRes = await fetch(file);
+          if (!fetchRes.ok) throw new Error('Failed to fetch remote URL');
+          fileBuffer = await fetchRes.arrayBuffer();
+          mimeType = fetchRes.headers.get('content-type') || 'application/octet-stream';
+          fileName = new URL(file).pathname.split('/').pop() || 'remote-file.bin';
+        } else {
+          const decoded = base64ToUint8Array(file);
+          fileBuffer = decoded.bytes.buffer;
+          mimeType = decoded.mime;
+        }
+      } else {
+        fileBuffer = await file.arrayBuffer();
+        fileName = file.name || 'upload.bin';
+        mimeType = file.type || detectMimeType(fileName);
+      }
+    } else if (contentType.includes('application/json')) {
+      const json = await request.json();
+      bodyKey = json.key || json.api_key || json.token;
+
+      const authCheck = await validateApiKey(request, env, bodyKey);
+      if (!authCheck.valid) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: authCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
+        }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      const input = json.file || json.image || json.url;
+      customName = json.name;
+      if (!input) return new Response(JSON.stringify({ success: false, error: 'Missing file, image, or url in JSON body' }), { status: 400 });
+      if (input.startsWith('http://') || input.startsWith('https://')) {
+        const safeCheck = isSafeUrl(input);
+        if (!safeCheck.safe) return new Response(JSON.stringify({ success: false, error: safeCheck.reason }), { status: 400 });
+        const fetchRes = await fetch(input);
+        if (!fetchRes.ok) throw new Error('Failed to fetch remote URL');
+        fileBuffer = await fetchRes.arrayBuffer();
+        mimeType = fetchRes.headers.get('content-type') || 'application/octet-stream';
+        fileName = new URL(input).pathname.split('/').pop() || 'remote-file.bin';
+      } else {
+        const decoded = base64ToUint8Array(input);
+        fileBuffer = decoded.bytes.buffer;
+        mimeType = decoded.mime;
+      }
+    } else {
+      const authCheck = await validateApiKey(request, env);
+      if (!authCheck.valid) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: authCheck.error || 'Unauthorized. Provide a valid developer API token via X-API-Key header or key parameter.'
+        }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+      fileBuffer = await request.arrayBuffer();
+      fileName = request.headers.get('x-filename') || 'upload.bin';
+      mimeType = contentType || 'application/octet-stream';
+    }
+
+    if (fileBuffer.byteLength > maxSize) {
+      return new Response(JSON.stringify({ success: false, error: `File size exceeds ${maxSize / (1024 * 1024)}MB limit` }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (customName) {
+      const ext = fileName.split('.').pop();
+      fileName = customName.includes('.') ? customName : `${customName}.${ext}`;
+    }
+
+    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
+
+    const ext = (resolvedName.split('.').pop() || fileName.split('.').pop() || 'bin').toLowerCase();
+    const slug = generateSlug();
+    const timestamp = Date.now();
+    const deleteToken = crypto.randomUUID();
+    const imageURL = `https://${domain}/${slug}.${ext}`;
+
+    await insertMediaRecord(env.DATABASE, imageURL, fileId, resolvedName, fileBuffer.byteLength, mimeType, timestamp, deleteToken);
+
+    // Direct developer response
+    return new Response(JSON.stringify({
+      success: true,
+      url: imageURL,
+      filename: resolvedName,
+      size: fileBuffer.byteLength,
+      size_formatted: formatBytes(fileBuffer.byteLength),
+      mime_type: mimeType,
+      uploaded_at: new Date(timestamp).toISOString()
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// Optional ImgBB v1 Drop-in API (POST /api/1/upload)
+async function handleImgBBApiUpload(request, env, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
+  try {
+    let fileBuffer;
+    let fileName = 'file.bin';
+    let mimeType = 'application/octet-stream';
+    let customName = null;
+    let bodyKey = null;
+
+    const contentType = request.headers.get('content-type') || '';
+
+    if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
+      const formData = await request.formData();
+      bodyKey = formData.get('key') || formData.get('api_key');
+      const input = formData.get('image') || formData.get('file');
+      customName = formData.get('name');
+
+      const authCheck = await validateApiKey(request, env, bodyKey);
+      if (!authCheck.valid) {
+        return new Response(JSON.stringify({
+          status_code: 401,
+          error: { message: authCheck.error || 'Invalid or missing API key', code: 401 },
+          status_txt: 'Unauthorized'
+        }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (!input) {
+        return new Response(JSON.stringify({
+          status_code: 400,
+          error: { message: 'Missing image or file parameter', code: 400 },
+          status_txt: 'Bad Request'
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (typeof input === 'string') {
+        if (input.startsWith('http://') || input.startsWith('https://')) {
+          const safeCheck = isSafeUrl(input);
+          if (!safeCheck.safe) return new Response(JSON.stringify({ status_code: 400, error: { message: safeCheck.reason } }), { status: 400 });
+          const fetchRes = await fetch(input);
+          if (!fetchRes.ok) throw new Error('Failed to fetch remote URL');
+          fileBuffer = await fetchRes.arrayBuffer();
+          mimeType = fetchRes.headers.get('content-type') || 'application/octet-stream';
+          fileName = new URL(input).pathname.split('/').pop() || 'remote-file.bin';
+        } else {
+          const decoded = base64ToUint8Array(input);
+          fileBuffer = decoded.bytes.buffer;
+          mimeType = decoded.mime;
+        }
+      } else {
+        fileBuffer = await input.arrayBuffer();
+        fileName = input.name || 'upload.bin';
+        mimeType = input.type || detectMimeType(fileName);
+      }
+    } else {
+      fileBuffer = await request.arrayBuffer();
+      fileName = 'upload.bin';
+      mimeType = contentType || 'application/octet-stream';
+    }
+
+    if (fileBuffer.byteLength > maxSize) {
+      return new Response(JSON.stringify({
+        status_code: 413,
+        error: { message: `File size exceeds ${maxSize / (1024 * 1024)}MB limit`, code: 413 }
+      }), { status: 413, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (customName) {
+      const ext = fileName.split('.').pop();
+      fileName = customName.includes('.') ? customName : `${customName}.${ext}`;
+    }
+
+    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
+
+    const ext = (resolvedName.split('.').pop() || fileName.split('.').pop() || 'bin').toLowerCase();
+    const slug = generateSlug();
+    const timestamp = Date.now();
+    const deleteToken = crypto.randomUUID();
+    const imageURL = `https://${domain}/${slug}.${ext}`;
+    const nameWithoutExt = resolvedName.replace(/\.[^/.]+$/, '');
+
+    await insertMediaRecord(env.DATABASE, imageURL, fileId, resolvedName, fileBuffer.byteLength, mimeType, timestamp, deleteToken);
+
+    return new Response(JSON.stringify({
+      data: {
+        id: slug,
+        title: resolvedName,
+        url: imageURL,
+        display_url: imageURL,
+        size: fileBuffer.byteLength,
+        time: Math.floor(timestamp / 1000),
+        image: {
+          filename: resolvedName,
+          name: nameWithoutExt,
+          mime: mimeType,
+          extension: ext,
+          url: imageURL
+        }
+      },
+      success: true,
+      status: 200
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      status_code: 500,
+      error: { message: error.message || 'Internal Server Error', code: 500 }
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
+// Redirect /v/:id to direct file URL
+async function handleViewerRedirect(request, DATABASE, domain) {
+  const urlObj = new URL(request.url);
+  const slug = urlObj.pathname.split('/')[2]?.split('.')[0];
+  if (!slug) return Response.redirect(`https://${domain}/`, 302);
+
+  const record = await DATABASE.prepare('SELECT url FROM media WHERE url LIKE ? OR url LIKE ?')
+    .bind(`%/${slug}`, `%/${slug}.%`).first();
+
+  if (record && record.url) {
+    return Response.redirect(record.url, 302);
+  }
+  return new Response('File Not Found', { status: 404 });
+}
+
+// ShareX Configuration Generator (.sxcu)
+function handleShareXConfigRequest(request, domain) {
+  const sxcuConfig = {
+    Version: '15.0.0',
+    Name: `CommonThread (${domain})`,
+    DestinationType: 'ImageUploader, TextUploader, FileUploader',
+    RequestMethod: 'POST',
+    RequestURL: `https://${domain}/api/upload`,
+    Body: 'MultipartFormData',
+    FileFormName: 'file',
+    URL: '$json:url$'
+  };
+
+  return new Response(JSON.stringify(sxcuConfig, null, 2), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="CommonThread-${domain}.sxcu"`
+    }
+  });
+}
+
+// Metadata Info API (GET /api/info?url=... or /api/info?id=...)
+async function handleApiInfoRequest(request, DATABASE, domain) {
+  try {
+    const urlObj = new URL(request.url);
+    const targetUrl = urlObj.searchParams.get('url');
+    const id = urlObj.searchParams.get('id');
+
+    if (!targetUrl && !id) {
+      return new Response(JSON.stringify({ success: false, error: 'Provide url or id parameter' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    let record = null;
+    if (targetUrl) {
+      record = await DATABASE.prepare('SELECT * FROM media WHERE url = ?').bind(targetUrl).first();
+    } else if (id) {
+      record = await DATABASE.prepare('SELECT * FROM media WHERE url LIKE ? OR url LIKE ?')
+        .bind(`%/${id}`, `%/${id}.%`).first();
+    }
+
+    if (!record) {
+      return new Response(JSON.stringify({ success: false, error: 'Media not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const filename = record.filename || record.url.split('/').pop();
+    const ext = filename.split('.').pop().toLowerCase();
+    const slug = record.url.split('/').pop().split('.')[0];
+
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        id: slug,
+        filename: filename,
+        extension: ext,
+        mime_type: record.mime_type || detectMimeType(filename),
+        size: record.file_size || null,
+        size_formatted: record.file_size ? formatBytes(record.file_size) : null,
+        url: record.url,
+        created_at: record.created_at ? new Date(record.created_at).toISOString() : null
+      }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// Delete Media API (POST /api/delete)
+async function handleApiDeleteRequest(request, DATABASE, USERNAME, PASSWORD) {
+  try {
+    const urlObj = new URL(request.url);
+    let token = urlObj.searchParams.get('token');
+    let targetUrl = urlObj.searchParams.get('url');
+
+    if (request.method === 'POST') {
+      try {
+        const body = await request.json();
+        token = body.token || token;
+        targetUrl = body.url || targetUrl;
+      } catch {}
+    }
+
+    if (!targetUrl) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing target url parameter' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const isAdmin = authenticate(request, USERNAME, PASSWORD);
+    let authorized = isAdmin;
+    if (!authorized && token) {
+      const record = await DATABASE.prepare('SELECT delete_token FROM media WHERE url = ?').bind(targetUrl).first();
+      if (record && record.delete_token && record.delete_token === token) {
+        authorized = true;
+      }
+    }
+
+    if (!authorized) {
+      return new Response(JSON.stringify({ success: false, error: 'Unauthorized to delete this file' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    await DATABASE.prepare('DELETE FROM media WHERE url = ?').bind(targetUrl).run();
+
+    const cache = caches.default;
+    const cacheKey = new Request(targetUrl);
+    await cache.delete(cacheKey);
+
+    return new Response(JSON.stringify({ success: true, message: 'File deleted successfully' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// Telegram Bot Register Request (POST /api/register)
+async function handleApiRegisterRequest(request, DATABASE, domain, USERNAME, PASSWORD) {
+  try {
+    if (!authenticate(request, USERNAME, PASSWORD)) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+    const data = await request.json();
+    const { fileId, originalFileName, fileExtension, fileSize, mediaType } = data;
+    if (!fileId) return new Response(JSON.stringify({ error: 'Missing fileId' }), { status: 400 });
+
+    const slug = generateSlug();
+    const ext = fileExtension || 'bin';
+    const timestamp = Date.now();
+    const deleteToken = crypto.randomUUID();
+    const imageURL = `https://${domain}/${slug}.${ext}`;
+    const finalName = originalFileName || `telegram_upload.${ext}`;
+    const detectedMime = mediaType || detectMimeType(finalName);
+
+    await insertMediaRecord(DATABASE, imageURL, fileId, finalName, fileSize || 0, detectedMime, timestamp, deleteToken);
+
+    const json = {
+      data: imageURL,
+      url: imageURL,
+      filename: finalName,
+      size: fileSize || 0,
+      uploaded_on: new Date(timestamp).toISOString(),
+      media_type: detectedMime,
+      creator: 'https://t.me/Imagehostssbot'
+    };
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
+// Form Upload Request (POST /upload)
+async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
+  try {
+    if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
+      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+    }
+
+    const formData = await request.formData();
+    const file = formData.get('file');
+    if (!file) throw new Error('Missing file parameter');
+
+    if (file.size > maxSize) {
+      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const fileBuffer = await file.arrayBuffer();
+    const originalFileName = file.name || 'upload.bin';
+    const mimeType = file.type || detectMimeType(originalFileName);
+
+    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, originalFileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID);
+
+    const ext = (resolvedName.split('.').pop() || 'bin').toLowerCase();
+    const slug = generateSlug();
+    const timestamp = Date.now();
+    const deleteToken = crypto.randomUUID();
+    const imageURL = `https://${domain}/${slug}.${ext}`;
+
+    await insertMediaRecord(DATABASE, imageURL, fileId, resolvedName, file.size, mimeType, timestamp, deleteToken);
+
+    const json = {
+      success: true,
+      data: imageURL,
+      url: imageURL,
+      filename: resolvedName,
+      size: file.size,
+      size_formatted: formatBytes(file.size),
+      uploaded_on: new Date(timestamp).toISOString(),
+      media_type: mimeType
+    };
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } catch (error) {
+    console.error('Upload Error:', error);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
+// Hardened Remote URL Ingestion (GET /hosturl?url=...)
+async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
+  try {
+    if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
+      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+    }
+
+    const url = new URL(request.url);
+    const fileUrl = url.searchParams.get('url');
+    if (!fileUrl) {
+      return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const safeCheck = isSafeUrl(fileUrl);
+    if (!safeCheck.safe) {
+      return new Response(JSON.stringify({ error: safeCheck.reason }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const fileResponse = await fetch(fileUrl);
+    if (!fileResponse.ok) {
+      return new Response(JSON.stringify({ error: 'Failed to download file from URL' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const contentLength = fileResponse.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > maxSize) {
+      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
+    const fileName = new URL(fileUrl).pathname.split('/').pop() || 'downloaded-file';
+    const fileBuffer = await fileResponse.arrayBuffer();
+
+    if (fileBuffer.byteLength > maxSize) {
+      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, contentType, TG_BOT_TOKEN, TG_CHAT_ID);
+
+    const ext = (resolvedName.split('.').pop() || fileName.split('.').pop() || 'bin').toLowerCase();
+    const slug = generateSlug();
+    const timestamp = Date.now();
+    const deleteToken = crypto.randomUUID();
+    const imageURL = `https://${domain}/${slug}.${ext}`;
+
+    await insertMediaRecord(DATABASE, imageURL, fileId, resolvedName, fileBuffer.byteLength, contentType, timestamp, deleteToken);
+
+    const json = {
+      success: true,
+      data: imageURL,
+      url: imageURL,
+      filename: resolvedName,
+      size: fileBuffer.byteLength,
+      size_formatted: formatBytes(fileBuffer.byteLength),
+      uploaded_on: new Date(timestamp).toISOString(),
+      media_type: contentType
+    };
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } catch (error) {
+    console.error('URL Upload Error:', error);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
+// ==========================================
+// MEDIA RETRIEVAL & STREAMING (RANGE SUPPORT)
+// ==========================================
+async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
+  const urlObj = new URL(request.url);
+  const cleanUrl = `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`;
+  const cache = caches.default;
+  const cacheKey = new Request(cleanUrl);
+
+  const rangeHeader = request.headers.get('Range');
+
+  if (!rangeHeader) {
+    const cachedResponse = await cache.match(cacheKey);
+    if (cachedResponse) return cachedResponse;
+  }
+
+  let result = await DATABASE.prepare('SELECT fileId, filename FROM media WHERE url = ?').bind(cleanUrl).first();
+
+  if (!result) {
+    const slug = urlObj.pathname.split('/').pop().split('.')[0];
+    result = await DATABASE.prepare('SELECT fileId, filename FROM media WHERE url LIKE ? OR url LIKE ?')
+      .bind(`%/${slug}`, `%/${slug}.%`).first();
+  }
+
+  if (!result) {
+    return new Response('File Not Found', {
+      status: 404,
+      headers: {
+        'Content-Type': 'text/plain',
+        'Cache-Control': 'no-store, no-cache, must-revalidate'
+      }
+    });
+  }
+
+  const fileId = result.fileId;
+  let filePath;
+  let attempts = 0;
+  while (attempts < 3) {
+    const getFilePath = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/getFile?file_id=${fileId}`);
+    if (!getFilePath.ok) return new Response('Failed to locate file on storage server', { status: 502 });
+    const fileData = await getFilePath.json();
+    if (fileData.ok && fileData.result.file_path) {
+      filePath = fileData.result.file_path;
+      break;
+    }
+    attempts++;
+  }
+
+  if (!filePath) {
+    return new Response('File path resolution failed', { status: 404 });
+  }
+
+  const getFileResponse = `https://api.telegram.org/file/bot${TG_BOT_TOKEN}/${filePath}`;
+
+  const fetchHeaders = new Headers();
+  if (rangeHeader) {
+    fetchHeaders.set('Range', rangeHeader);
+  }
+
+  const response = await fetch(getFileResponse, { headers: fetchHeaders });
+  if (!response.ok && response.status !== 206) {
+    return new Response('Failed to obtain file content from storage', { status: 502 });
+  }
+
+  const fileExtension = (result.filename || cleanUrl).split('.').pop().toLowerCase();
+  const contentType = result.mime_type || MIME_TYPES[fileExtension] || 'application/octet-stream';
+
+  const headers = new Headers(response.headers);
+  headers.set('Content-Type', contentType);
+  headers.set('Accept-Ranges', 'bytes');
+
+  const shouldForceDownload = EXECUTABLE_EXTENSIONS.has(fileExtension);
+  const cleanFilename = (result.filename || `file.${fileExtension}`).replace(/[^\w\.\-\s]/g, '_');
+
+  if (shouldForceDownload) {
+    headers.set('Content-Disposition', `attachment; filename="${cleanFilename}"`);
+  } else {
+    headers.set('Content-Disposition', `inline; filename="${cleanFilename}"`);
+  }
+
+  if (response.status === 200 && !rangeHeader) {
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    const responseToCache = new Response(response.body, { status: 200, headers });
+    await cache.put(cacheKey, responseToCache.clone()).catch(() => {});
+    return responseToCache;
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    headers
+  });
+}
+
+// ==========================================
+// CLEAN WEB UI (Root /)
+// ==========================================
+async function handleRootRequest(request, USERNAME, PASSWORD, enableAuth, domain) {
+  if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
+    return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+  }
+
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CommonThread - Media Hosting</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <title>CommonThread - Universal Media Hosting & Developer API</title>
+  <meta name="description" content="Host any media: images, videos, audio, PDF, documents, scripts (.bat, .sh), and text. Simple Developer API available.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
   <style>
-    :root { --bg: #0e0e0e; --panel: #1a1a1a; --text: #eaeaea; --muted: #888; --accent: #f0a500; --border: #333; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .container { width: 100%; max-width: 640px; margin-top: 2rem; }
-    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
-    .logo { font-weight: 600; font-size: 1.25rem; display: flex; align-items: center; gap: 0.5rem; }
-    .logo span { color: var(--accent); }
-    .nav-links { display: flex; gap: 1rem; font-size: 0.9rem; }
-    .nav-links a { color: var(--muted); }
-    .nav-links a:hover { color: var(--text); }
-    
-    .upload-zone { border: 1px dashed var(--border); border-radius: 8px; padding: 3rem 2rem; text-align: center; background: var(--panel); cursor: pointer; transition: border-color 0.2s; position: relative; overflow: hidden; }
-    .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); }
-    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-    .upload-msg { font-size: 1rem; font-weight: 500; margin-bottom: 0.5rem; }
-    .upload-hint { font-size: 0.85rem; color: var(--muted); }
-    
-    .url-upload { margin-top: 1rem; display: flex; gap: 0.5rem; }
-    .url-upload input { flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 0.75rem 1rem; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; outline: none; }
-    .url-upload input:focus { border-color: var(--accent); }
-    .url-upload button { background: var(--text); color: var(--bg); border: none; padding: 0 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; }
-    .url-upload button:hover { background: #fff; }
-    
-    .progress-bar { height: 2px; background: var(--border); margin-top: 1rem; border-radius: 2px; overflow: hidden; display: none; }
-    .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.2s; }
-    
-    .result-panel { margin-top: 2rem; display: none; }
-    .result-header { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem; display: flex; justify-content: space-between; }
-    .format-toggles { display: flex; gap: 0.5rem; }
-    .format-toggles button { background: none; border: none; color: var(--muted); font-size: 0.8rem; cursor: pointer; }
-    .format-toggles button.active { color: var(--accent); font-weight: 600; }
-    .result-box { display: flex; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-    .result-box input { flex: 1; background: transparent; border: none; color: var(--text); padding: 0.75rem 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; outline: none; }
-    .copy-btn { background: transparent; border: none; border-left: 1px solid var(--border); color: var(--text); padding: 0 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; }
-    .copy-btn:hover { background: rgba(255,255,255,0.05); }
-    
-    .preview-img { max-width: 100%; max-height: 200px; border-radius: 6px; margin-top: 1rem; border: 1px solid var(--border); display: none; object-fit: contain; background: #000; }
-    
-    .history { margin-top: 3rem; }
-    .history h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 1rem; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-    .history-list { list-style: none; display: grid; gap: 0.5rem; }
-    .history-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--panel); border-radius: 6px; border: 1px solid var(--border); font-size: 0.85rem; }
-    .history-item a { font-family: 'JetBrains Mono', monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%; }
-    
-    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--panel); border: 1px solid var(--border); padding: 0.75rem 1.25rem; border-radius: 6px; font-size: 0.9rem; font-weight: 500; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100; }
+    body { font-family: 'Inter', sans-serif; background-color: #09090b; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
   </style>
 </head>
-<body>
-  <div class="container">
-    <header>
-      <div class="logo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-        Common<span>Thread</span>
-      </div>
-      <div class="nav-links">
-        <a href="/admin">Admin</a>
-        <a href="/docs">API</a>
-      </div>
-    </header>
-
-    <div class="upload-zone" id="dropzone">
-      <input type="file" id="fileInput">
-      <div class="upload-msg">Click or drag a file here</div>
-      <div class="upload-hint">Up to 20MB. Images, videos, documents.</div>
-    </div>
-    
-    <div class="url-upload">
-      <input type="text" id="urlInput" placeholder="Or paste a URL directly... (Ctrl+K)">
-      <button id="urlBtn">Fetch</button>
-    </div>
-
-    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
-
-    <div class="result-panel" id="resultPanel">
-      <div class="result-header">
-        <span>File Ready</span>
-        <div class="format-toggles" id="formatToggles">
-          <button class="active" data-format="url">URL</button>
-          <button data-format="md">Markdown</button>
-          <button data-format="bb">BBCode</button>
-          <button data-format="html">HTML</button>
+<body class="text-zinc-100 min-h-screen flex flex-col antialiased selection:bg-orange-500/20 selection:text-orange-300">
+  <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-black font-bold text-lg shadow-lg shadow-orange-500/20">
+          <span class="iconify" data-icon="lucide:layers"></span>
         </div>
+        <span class="font-bold text-lg tracking-tight">CommonThread</span>
+      </a>
+      <div class="flex items-center gap-3">
+        <a href="/docs" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-orange-500/10">
+          <span class="iconify" data-icon="lucide:terminal"></span>
+          <span>Developer API Docs</span>
+        </a>
+        <a href="/admin" class="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition">
+          Admin
+        </a>
       </div>
-      <div class="result-box">
-        <input type="text" id="resultInput" readonly>
-        <button class="copy-btn" id="copyBtn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-12 flex flex-col gap-8 justify-center">
+    <div class="text-center space-y-3">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold uppercase tracking-wider">
+        <span>Universal Media Host & Developer API</span>
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+        Host Any Media & Files
+      </h1>
+      <p class="text-zinc-400 text-sm max-w-lg mx-auto">
+        Upload images, PDFs, videos, audio, text, or scripts (<code class="text-orange-400">.bat</code>, <code class="text-orange-400">.sh</code>, <code class="text-orange-400">.txt</code>) and get instant direct links.
+      </p>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+      <div id="dropzone" class="border-2 border-dashed border-zinc-700 rounded-2xl p-8 sm:p-12 text-center cursor-pointer hover:border-orange-500 transition-all flex flex-col items-center justify-center gap-3">
+        <input type="file" id="file-input" class="hidden" />
+        <div class="w-14 h-14 rounded-2xl bg-orange-500/10 text-orange-400 flex items-center justify-center text-3xl">
+          <span class="iconify" data-icon="lucide:upload-cloud"></span>
+        </div>
+        <div>
+          <p class="text-base font-semibold text-white">Click to browse or drag & drop any file</p>
+          <p class="text-xs text-zinc-400 mt-1">Supports any media up to 20MB</p>
+        </div>
+        <button type="button" onclick="document.getElementById('file-input').click()" class="mt-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition">
+          Select File
         </button>
       </div>
-      <img id="previewImg" class="preview-img" alt="Preview">
+
+      <!-- Upload Progress -->
+      <div id="progress-box" class="hidden space-y-2">
+        <div class="flex justify-between text-xs text-zinc-400 font-medium">
+          <span id="progress-status">Uploading file...</span>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div class="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
+          <div id="progress-bar" class="bg-orange-500 h-full w-0 transition-all duration-300"></div>
+        </div>
+      </div>
+
+      <!-- Upload Result -->
+      <div id="result-box" class="hidden space-y-3 p-4 bg-zinc-950 border border-zinc-800 rounded-2xl">
+        <div class="flex items-center justify-between text-xs text-zinc-400">
+          <span class="font-bold text-white flex items-center gap-1.5">
+            <span class="iconify text-green-400 text-base" data-icon="lucide:check-circle"></span>
+            <span id="res-filename">File</span>
+          </span>
+          <span id="res-size">0 KB</span>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" id="res-url" readonly class="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs mono text-zinc-200 focus:outline-none" />
+          <button onclick="copyDirectUrl()" class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1">
+            <span class="iconify" data-icon="lucide:copy"></span>
+            <span id="copy-btn-label">Copy</span>
+          </button>
+          <a id="res-open-link" href="#" target="_blank" class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition flex items-center gap-1">
+            <span class="iconify" data-icon="lucide:external-link"></span>
+          </a>
+        </div>
+      </div>
     </div>
 
-    <div class="history" id="historyPanel" style="display: none;">
-      <h3>Recent Uploads</h3>
-      <ul class="history-list" id="historyList"></ul>
+    <!-- Developer API Banner -->
+    <div class="bg-gradient-to-r from-zinc-900 via-zinc-950 to-zinc-900 border border-zinc-800 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="space-y-1 text-center sm:text-left">
+        <h3 class="text-sm font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+          <span class="iconify text-orange-400" data-icon="lucide:terminal"></span>
+          <span>Upload directly from your app or project</span>
+        </h3>
+        <p class="text-xs text-zinc-400">Use our simple REST API <code class="text-zinc-300 mono bg-zinc-800 px-1.5 py-0.5 rounded">POST /api/upload</code> in Python, JS, cURL, etc.</p>
+      </div>
+      <a href="/docs" class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition shrink-0">
+        Read API Docs &rarr;
+      </a>
     </div>
+  </main>
+
+  <div id="toast" class="fixed bottom-6 right-6 px-4 py-2.5 rounded-xl bg-zinc-800 text-white text-xs font-medium border border-zinc-700 shadow-2xl opacity-0 pointer-events-none transition-all duration-300 z-50">
+    Copied link!
   </div>
 
-  <div class="toast" id="toast">Copied to clipboard</div>
-
   <script>
-    const dz = document.getElementById('dropzone');
-    const fi = document.getElementById('fileInput');
-    const ui = document.getElementById('urlInput');
-    const ub = document.getElementById('urlBtn');
-    const pb = document.getElementById('progressBar');
-    const pf = document.getElementById('progressFill');
-    const rp = document.getElementById('resultPanel');
-    const ri = document.getElementById('resultInput');
-    const cb = document.getElementById('copyBtn');
-    const toast = document.getElementById('toast');
-    const pi = document.getElementById('previewImg');
-    const hl = document.getElementById('historyList');
-    const hp = document.getElementById('historyPanel');
-    const toggles = document.querySelectorAll('.format-toggles button');
-    
-    let currentUrl = '';
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 'k') { e.preventDefault(); ui.focus(); }
+    const fileInput = document.getElementById('file-input');
+    const dropzone = document.getElementById('dropzone');
+
+    ['dragenter', 'dragover'].forEach(e => dropzone.addEventListener(e, (ev) => { ev.preventDefault(); dropzone.classList.add('border-orange-500'); }));
+    ['dragleave', 'drop'].forEach(e => dropzone.addEventListener(e, (ev) => { ev.preventDefault(); dropzone.classList.remove('border-orange-500'); }));
+    dropzone.addEventListener('drop', (ev) => {
+      if (ev.dataTransfer.files && ev.dataTransfer.files.length) uploadFile(ev.dataTransfer.files[0]);
     });
-    
-    document.addEventListener('paste', (e) => {
-      if (document.activeElement === ui || document.activeElement === ri) return;
-      if (e.clipboardData.files.length) { handleFile(e.clipboardData.files[0]); }
+    fileInput.addEventListener('change', (ev) => {
+      if (ev.target.files && ev.target.files.length) uploadFile(ev.target.files[0]);
+    });
+    window.addEventListener('paste', (ev) => {
+      if (ev.clipboardData && ev.clipboardData.files.length) uploadFile(ev.clipboardData.files[0]);
     });
 
-    // Drag & Drop
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => e.preventDefault()));
-    ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, () => dz.classList.add('dragover')));
-    ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, () => dz.classList.remove('dragover')));
-    dz.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
-    fi.addEventListener('change', () => { if (fi.files.length) handleFile(fi.files[0]); });
-    
-    ub.addEventListener('click', () => {
-      if (ui.value) uploadUrl(ui.value);
-    });
-    ui.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && ui.value) uploadUrl(ui.value);
-    });
-
-    function showToast(msg) {
-      toast.textContent = msg;
-      toast.style.display = 'block';
-      setTimeout(() => toast.style.display = 'none', 3000);
-    }
-    
-    function setProgress(percent) {
-      if (percent === 0) { pb.style.display = 'block'; pf.style.width = '0%'; }
-      else if (percent >= 100) { pf.style.width = '100%'; setTimeout(() => pb.style.display = 'none', 500); }
-      else { pf.style.width = percent + '%'; }
-    }
-
-    function showResult(url, isImage) {
-      currentUrl = url;
-      rp.style.display = 'block';
-      updateFormat();
-      
-      if (isImage) { pi.src = url; pi.style.display = 'block'; } 
-      else { pi.style.display = 'none'; }
-      
-      saveHistory(url);
-    }
-
-    toggles.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        toggles.forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        updateFormat();
-      });
-    });
-
-    function updateFormat() {
-      const format = document.querySelector('.format-toggles .active').dataset.format;
-      let out = currentUrl;
-      if (format === 'md') out = '![Image](' + currentUrl + ')';
-      if (format === 'bb') out = '[img]' + currentUrl + '[/img]';
-      if (format === 'html') out = '<img src="' + currentUrl + '" alt="Image" />';
-      ri.value = out;
-    }
-
-    cb.addEventListener('click', () => {
-      ri.select();
-      document.execCommand('copy');
-      showToast('Copied to clipboard');
-    });
-
-    async function handleFile(file) {
+    async function uploadFile(file) {
       if (file.size > 20 * 1024 * 1024) return showToast('File exceeds 20MB limit');
-      setProgress(0);
+
+      const progressBox = document.getElementById('progress-box');
+      const progressBar = document.getElementById('progress-bar');
+      const progressPercent = document.getElementById('progress-percent');
+      const resultBox = document.getElementById('result-box');
+
+      progressBox.classList.remove('hidden');
+      resultBox.classList.add('hidden');
+      progressBar.style.width = '45%';
+      progressPercent.textContent = '45%';
+
       const fd = new FormData();
       fd.append('file', file);
-      
-      // Fake progress
-      let p = 10;
-      const int = setInterval(() => { p += Math.random()*20; if(p>85)p=85; setProgress(p); }, 200);
 
       try {
-        const res = await fetch('/upload', { method: 'POST', body: fd });
-        clearInterval(int);
-        setProgress(100);
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
-        showResult(data.url, file.type.startsWith('image/'));
+
+        progressBar.style.width = '100%';
+        progressPercent.textContent = '100%';
+
+        setTimeout(() => {
+          progressBox.classList.add('hidden');
+          resultBox.classList.remove('hidden');
+          document.getElementById('res-filename').textContent = data.filename;
+          document.getElementById('res-size').textContent = data.size_formatted || (Math.round(data.size / 1024) + ' KB');
+          document.getElementById('res-url').value = data.url;
+          document.getElementById('res-open-link').href = data.url;
+          showToast('Upload successful!');
+        }, 400);
       } catch (err) {
-        clearInterval(int);
-        setProgress(100);
+        progressBox.classList.add('hidden');
         showToast('Upload failed: ' + err.message);
       }
     }
 
-    async function uploadUrl(url) {
-      setProgress(0);
-      let p = 10;
-      const int = setInterval(() => { p += Math.random()*20; if(p>85)p=85; setProgress(p); }, 200);
-      try {
-        const res = await fetch('/hosturl?url=' + encodeURIComponent(url));
-        clearInterval(int);
-        setProgress(100);
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        showResult(data.url, true);
-        ui.value = '';
-      } catch (err) {
-        clearInterval(int);
-        setProgress(100);
-        showToast('Fetch failed: ' + err.message);
-      }
+    function copyDirectUrl() {
+      const input = document.getElementById('res-url');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      showToast('Copied direct URL!');
     }
-    
-    function saveHistory(url) {
-      let h = JSON.parse(localStorage.getItem('ct_history') || '[]');
-      h = [url, ...h.filter(x => x !== url)].slice(0, 5);
-      localStorage.setItem('ct_history', JSON.stringify(h));
-      renderHistory();
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
     }
-    
-    function renderHistory() {
-      const h = JSON.parse(localStorage.getItem('ct_history') || '[]');
-      if (h.length === 0) { hp.style.display = 'none'; return; }
-      hp.style.display = 'block';
-      hl.innerHTML = h.map(url => '        <li class="history-item">          <a href="' + url + '" target="_blank">' + url + '</a>          <button style="background:none;border:none;color:var(--muted);cursor:pointer;" onclick="navigator.clipboard.writeText(&quot;' + url + '&quot;);showToast(&quot;Copied!&quot;)">            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>          </button>        </li>').join('');
-    }
-    renderHistory();
   </script>
 </body>
-</html>
-`, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+</html>`;
 
-  return response;
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
 }
 
-async function handleAdminRequest(DATABASE, request, USERNAME, PASSWORD) {
+// ==========================================
+// DEDICATED DEVELOPER API DOCUMENTATION (/docs)
+// ==========================================
+function serveDocumentationPage(domain) {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Developer API - CommonThread</title>
+  <meta name="description" content="Upload any media from your app, bot, or platform using the CommonThread Developer API.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #09090b; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="text-zinc-100 min-h-screen flex flex-col antialiased selection:bg-orange-500/20 selection:text-orange-300">
+  <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-black font-bold text-lg shadow-lg shadow-orange-500/20">
+          <span class="iconify" data-icon="lucide:layers"></span>
+        </div>
+        <span class="font-bold text-lg tracking-tight">CommonThread <span class="text-orange-400 text-sm font-normal">Developer API</span></span>
+      </a>
+      <a href="/" class="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition">
+        Web Uploader &rarr;
+      </a>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-10 space-y-10">
+    <div class="space-y-3">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold uppercase tracking-wider">
+        REST API Reference
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Developer File Upload API</h1>
+      <p class="text-zinc-400 text-sm sm:text-base max-w-2xl leading-relaxed">
+        Integrate file and media uploads directly into your apps, websites, scripts, or bots. Upload any file type (images, PDF, .txt, .bat, audio, video, documents) and receive a permanent direct URL.
+      </p>
+    </div>
+
+    <!-- Endpoint Card -->
+    <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
+      <div class="flex items-center gap-3">
+        <span class="px-2.5 py-1 rounded-lg bg-orange-500 text-black font-bold text-xs uppercase">POST</span>
+        <span class="text-sm sm:text-base mono font-semibold text-white">https://${domain}/api/upload</span>
+      </div>
+      <p class="text-xs text-zinc-400">Accepts multipart form-data, JSON with a remote URL, or Base64 data.</p>
+
+      <div class="border-t border-zinc-800/80 pt-4 space-y-3 text-xs">
+        <h4 class="font-semibold text-zinc-300 uppercase tracking-wider">Parameters</h4>
+        <div class="space-y-2">
+          <div class="flex items-start gap-3">
+            <code class="text-orange-400 font-bold shrink-0">file</code>
+            <span class="text-zinc-400">The file to upload (<code class="text-zinc-300">multipart/form-data</code>). Supports any format (e.g. <code class="text-zinc-300">.png</code>, <code class="text-zinc-300">.pdf</code>, <code class="text-zinc-300">.bat</code>, <code class="text-zinc-300">.txt</code>, <code class="text-zinc-300">.mp4</code>).</span>
+          </div>
+          <div class="flex items-start gap-3">
+            <code class="text-orange-400 font-bold shrink-0">url</code>
+            <span class="text-zinc-400">Optional remote URL (<code class="text-zinc-300">application/json</code>) to download and host directly.</span>
+          </div>
+          <div class="flex items-start gap-3">
+            <code class="text-orange-400 font-bold shrink-0">X-API-Key</code>
+            <span class="text-zinc-400">Optional header if an API key is configured on the server.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- JSON Response Preview -->
+      <div class="border-t border-zinc-800/80 pt-4 space-y-2">
+        <h4 class="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Response (200 OK)</h4>
+        <pre class="bg-zinc-950 p-4 rounded-xl border border-zinc-800 text-xs mono text-zinc-300 overflow-x-auto"><code>{
+  "success": true,
+  "url": "https://${domain}/1794849181001_81n59t.bat",
+  "filename": "my_script.bat",
+  "size": 1024,
+  "size_formatted": "1.00 KB",
+  "mime_type": "application/x-bat",
+  "uploaded_at": "2026-11-16T17:40:00.000Z"
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- Code Examples (Tabbed) -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <span class="iconify text-orange-400" data-icon="lucide:code"></span>
+          <span>Integration Code Snippets</span>
+        </h2>
+        <div class="flex gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-800 text-xs">
+          <button onclick="showCodeTab('curl')" id="tab-btn-curl" class="px-3 py-1.5 rounded-lg bg-orange-500 text-black font-semibold">cURL</button>
+          <button onclick="showCodeTab('python')" id="tab-btn-python" class="px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white">Python</button>
+          <button onclick="showCodeTab('js')" id="tab-btn-js" class="px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white">JavaScript</button>
+          <button onclick="showCodeTab('php')" id="tab-btn-php" class="px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white">PHP</button>
+          <button onclick="showCodeTab('go')" id="tab-btn-go" class="px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white">Go</button>
+        </div>
+      </div>
+
+      <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 relative overflow-hidden">
+        <button onclick="copySnippet()" class="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5">
+          <span class="iconify" data-icon="lucide:copy"></span>
+          <span>Copy</span>
+        </button>
+        <div class="pt-4">
+          <pre id="code-curl" class="snippet-block mono text-xs text-zinc-300 overflow-x-auto leading-relaxed">curl -X POST https://${domain}/api/upload \
+  -F "file=@/path/to/any_file.pdf"</pre>
+
+          <pre id="code-python" class="snippet-block hidden mono text-xs text-zinc-300 overflow-x-auto leading-relaxed">import requests
+
+url = "https://${domain}/api/upload"
+
+# Upload any file: image, document, script, text
+with open("script.bat", "rb") as f:
+    response = requests.post(url, files={"file": f})
+
+data = response.json()
+if data.get("success"):
+    print("Direct URL:", data["url"])
+else:
+    print("Error:", data.get("error"))</pre>
+
+          <pre id="code-js" class="snippet-block hidden mono text-xs text-zinc-300 overflow-x-auto leading-relaxed">// Browser or Node.js fetch
+const formData = new FormData();
+formData.append("file", fileInput.files[0]);
+
+const response = await fetch("https://${domain}/api/upload", {
+  method: "POST",
+  body: formData
+});
+
+const data = await response.json();
+console.log("Direct File URL:", data.url);</pre>
+
+          <pre id="code-php" class="snippet-block hidden mono text-xs text-zinc-300 overflow-x-auto leading-relaxed">&lt;?php
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, "https://${domain}/api/upload");
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, [
+    "file" => new CURLFile("/path/to/script.bat")
+]);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+$data = json_decode(curl_exec($ch), true);
+curl_close($ch);
+
+echo "Direct URL: " . $data["url"];
+?&gt;</pre>
+
+          <pre id="code-go" class="snippet-block hidden mono text-xs text-zinc-300 overflow-x-auto leading-relaxed">package main
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
+)
+
+func main() {
+	file, _ := os.Open("document.pdf")
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "document.pdf")
+	io.Copy(part, file)
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", "https://${domain}/api/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	resp, _ := client.Do(req)
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	fmt.Println(string(respBody))
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Interactive Tester -->
+    <div class="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="iconify text-orange-400" data-icon="lucide:play-circle"></span>
+          <span>Live API Tester</span>
+        </h3>
+        <span class="text-xs text-zinc-500">Test uploading from your browser</span>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 items-center">
+        <input type="file" id="test-file-input" class="text-xs text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700 cursor-pointer w-full sm:w-auto" />
+        <button onclick="runLiveTest()" id="test-btn" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition">
+          Send API Request
+        </button>
+      </div>
+
+      <div id="tester-output-box" class="hidden space-y-2 pt-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-zinc-400">Response Status: <span id="tester-status" class="font-bold text-green-400">200 OK</span></span>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('tester-json').textContent); showToast('JSON Copied!');" class="text-orange-400 hover:underline">Copy Response</button>
+        </div>
+        <pre class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-xs mono text-zinc-300 overflow-x-auto"><code id="tester-json"></code></pre>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" class="fixed bottom-6 right-6 px-4 py-2.5 rounded-xl bg-zinc-800 text-white text-xs font-medium border border-zinc-700 shadow-2xl opacity-0 pointer-events-none transition-all duration-300 z-50">
+    Copied!
+  </div>
+
+  <script>
+    function showCodeTab(lang) {
+      document.querySelectorAll('.snippet-block').forEach(el => el.classList.add('hidden'));
+      document.getElementById('code-' + lang).classList.remove('hidden');
+      ['curl', 'python', 'js', 'php', 'go'].forEach(t => {
+        const btn = document.getElementById('tab-btn-' + t);
+        if (t === lang) btn.className = 'px-3 py-1.5 rounded-lg bg-orange-500 text-black font-semibold';
+        else btn.className = 'px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white';
+      });
+    }
+
+    function copySnippet() {
+      const visible = document.querySelector('.snippet-block:not(.hidden)');
+      if (visible) {
+        navigator.clipboard.writeText(visible.textContent);
+        showToast('Code copied to clipboard!');
+      }
+    }
+
+    async function runLiveTest() {
+      const input = document.getElementById('test-file-input');
+      const btn = document.getElementById('test-btn');
+      if (!input.files.length) return showToast('Please select a file to test');
+
+      btn.disabled = true;
+      btn.textContent = 'Uploading...';
+
+      const fd = new FormData();
+      fd.append('file', input.files[0]);
+
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const json = await res.json();
+        document.getElementById('tester-status').textContent = res.status + ' ' + res.statusText;
+        document.getElementById('tester-json').textContent = JSON.stringify(json, null, 2);
+        document.getElementById('tester-output-box').classList.remove('hidden');
+        showToast('Request successful!');
+      } catch (err) {
+        showToast('Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send API Request';
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
+    }
+  </script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
+}
+
+
+
+// ==========================================
+// ADMIN DASHBOARD & GALLERY
+// ==========================================
+async function handleAdminRequest(DATABASE, request, USERNAME, PASSWORD, domain) {
   if (!authenticate(request, USERNAME, PASSWORD)) {
     return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
   }
-  return await generateAdminPage(DATABASE);
+  return await generateAdminPage(DATABASE, domain);
 }
 
-// New API endpoint for paginated media data with authentication
+async function handleAdminListKeys(DATABASE, request, USERNAME, PASSWORD) {
+  if (!authenticate(request, USERNAME, PASSWORD)) {
+    return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'Content-Type': 'application/json' }
+    });
+  }
+  if (!DATABASE) {
+    return new Response(JSON.stringify({ success: false, error: 'Database not bound' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+  try {
+    await ensureApiKeysTable(DATABASE);
+    const result = await DATABASE.prepare('SELECT key, name, created_at, active, uploads_count FROM api_keys ORDER BY created_at DESC').all();
+    return new Response(JSON.stringify({ success: true, keys: result.results || [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
+async function handleAdminCreateKey(DATABASE, request, USERNAME, PASSWORD) {
+  if (!authenticate(request, USERNAME, PASSWORD)) {
+    return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'Content-Type': 'application/json' }
+    });
+  }
+  if (!DATABASE) {
+    return new Response(JSON.stringify({ success: false, error: 'Database not bound' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+  try {
+    await ensureApiKeysTable(DATABASE);
+    let name = 'Developer Key';
+    try {
+      const body = await request.json();
+      if (body && body.name && body.name.trim()) name = body.name.trim();
+    } catch {}
+
+    const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    const key = `ct_dev_${randomPart}`;
+    const timestamp = Date.now();
+
+    await DATABASE.prepare('INSERT INTO api_keys (key, name, created_at, active, uploads_count) VALUES (?, ?, ?, 1, 0)')
+      .bind(key, name, timestamp).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      key,
+      name,
+      created_at: timestamp
+    }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
+async function handleAdminDeleteKey(DATABASE, request, USERNAME, PASSWORD) {
+  if (!authenticate(request, USERNAME, PASSWORD)) {
+    return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'Content-Type': 'application/json' }
+    });
+  }
+  if (!DATABASE) {
+    return new Response(JSON.stringify({ success: false, error: 'Database not bound' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+  try {
+    const url = new URL(request.url);
+    let keyToDelete = url.searchParams.get('key');
+    if (!keyToDelete) {
+      try {
+        const body = await request.json();
+        keyToDelete = body.key;
+      } catch {}
+    }
+    if (!keyToDelete) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing key parameter' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    await ensureApiKeysTable(DATABASE);
+    await DATABASE.prepare('DELETE FROM api_keys WHERE key = ?').bind(keyToDelete).run();
+    return new Response(JSON.stringify({ success: true, message: 'Developer API key deleted' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } catch (err) {
+    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
 async function handleAdminMediaApiRequest(DATABASE, request, USERNAME, PASSWORD) {
-  // Authentication check - same as admin panel
   if (!authenticate(request, USERNAME, PASSWORD)) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
@@ -1154,7 +1685,6 @@ async function handleAdminMediaApiRequest(DATABASE, request, USERNAME, PASSWORD)
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '100');
 
-    // Validate parameters
     if (page < 1 || limit < 1 || limit > 500) {
       return new Response(JSON.stringify({ error: 'Invalid parameters' }), {
         status: 400,
@@ -1162,20 +1692,17 @@ async function handleAdminMediaApiRequest(DATABASE, request, USERNAME, PASSWORD)
       });
     }
 
-    // Get total count and paginated data
     const total = await getTotalMediaCount(DATABASE);
     const mediaData = await fetchMediaData(DATABASE, page, limit);
     const hasMore = (page * limit) < total;
 
-    const response = {
+    return new Response(JSON.stringify({
       media: mediaData,
       total: total,
       page: page,
       limit: limit,
       has_more: hasMore
-    };
-
-    return new Response(JSON.stringify(response), {
+    }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -1187,21 +1714,12 @@ async function handleAdminMediaApiRequest(DATABASE, request, USERNAME, PASSWORD)
   }
 }
 
-// Get total count of media records
 async function getTotalMediaCount(DATABASE) {
   const result = await DATABASE.prepare('SELECT COUNT(*) as count FROM media').first();
   return result ? result.count : 0;
 }
 
-function isValidCredentials(authHeader, USERNAME, PASSWORD) {
-  const base64Credentials = authHeader.split(' ')[1];
-  const credentials = atob(base64Credentials).split(':');
-  const username = credentials[0];
-  const password = credentials[1];
-  return username === USERNAME && password === PASSWORD;
-}
-
-async function generateAdminPage(DATABASE) {
+async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.workers.dev') {
   // Load only first page initially (100 items) to avoid resource limits
   const totalCount = await getTotalMediaCount(DATABASE);
   const mediaData = await fetchMediaData(DATABASE, 1, 100);
@@ -1427,6 +1945,157 @@ async function generateAdminPage(DATABASE) {
     .gallery {
       grid-template-columns: repeat(2, 1fr);
     }
+  }
+  /* Navigation Tabs & Developer Token Dashboard */
+  .nav-tabs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .nav-tab {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #d0d7de;
+    background: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #24292f;
+  }
+  .nav-tab:hover {
+    background: #f6f8fa;
+  }
+  .nav-tab.active {
+    background: #0969da;
+    color: #ffffff;
+    border-color: #0969da;
+  }
+  .nav-link {
+    font-size: 13px;
+    color: #0969da;
+    text-decoration: none;
+    font-weight: 500;
+    margin-left: 6px;
+  }
+  .nav-link:hover {
+    text-decoration: underline;
+  }
+  .token-section {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .token-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e1e4e8;
+  }
+  .token-card h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 18px;
+    color: #1f2328;
+  }
+  .token-card p {
+    color: #656d76;
+    font-size: 13px;
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+  .token-form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .token-input {
+    flex: 1;
+    min-width: 240px;
+    padding: 10px 14px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+  }
+  .token-input:focus {
+    border-color: #0969da;
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+  }
+  .btn-primary {
+    background: #1f883d;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover {
+    background: #1a7f37;
+  }
+  .token-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .token-table th, .token-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #e1e4e8;
+  }
+  .token-table th {
+    background: #f6f8fa;
+    color: #656d76;
+    font-weight: 600;
+  }
+  .token-code {
+    font-family: monospace;
+    background: #f6f8fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #d0d7de;
+    font-size: 12px;
+  }
+  .btn-copy-token {
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: 6px;
+  }
+  .btn-copy-token:hover {
+    background: #e1e4e8;
+  }
+  .btn-revoke {
+    background: #cf222e;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btn-revoke:hover {
+    background: #a40e26;
+  }
+  .new-token-alert {
+    background: #dafbe1;
+    border: 1px solid #4ac26b;
+    color: #116329;
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin-top: 15px;
+    display: none;
+    font-size: 13px;
   }
   @keyframes fadeIn {
     from {
@@ -1695,6 +2364,105 @@ async function generateAdminPage(DATABASE) {
       }
     }
   
+    // Developer API Tokens Management
+    function switchAdminTab(tab) {
+      const galleryView = document.getElementById('view-gallery');
+      const tokensView = document.getElementById('view-tokens');
+      const tabGalleryBtn = document.getElementById('tab-gallery-btn');
+      const tabTokensBtn = document.getElementById('tab-tokens-btn');
+      const galleryActions = document.getElementById('gallery-actions');
+
+      if (tab === 'gallery') {
+        galleryView.classList.remove('hidden');
+        tokensView.classList.add('hidden');
+        tabGalleryBtn.classList.add('active');
+        tabTokensBtn.classList.remove('active');
+        if (selectedCount > 0) galleryActions.classList.remove('hidden');
+      } else {
+        galleryView.classList.add('hidden');
+        tokensView.classList.remove('hidden');
+        tabGalleryBtn.classList.remove('active');
+        tabTokensBtn.classList.add('active');
+        galleryActions.classList.add('hidden');
+        loadApiKeys();
+      }
+    }
+
+    async function loadApiKeys() {
+      const tbody = document.getElementById('tokens-table-body');
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">Loading tokens...</td></tr>';
+      try {
+        const res = await fetch('/admin/api/keys');
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to load');
+        if (!data.keys || data.keys.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">No developer tokens generated yet. Click "Generate API Token" above to create one.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.keys.map(function(k) {
+          const dateStr = new Date(k.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          return '<tr>' +
+            '<td><strong>' + escapeHtml(k.name) + '</strong></td>' +
+            '<td><code class="token-code">' + escapeHtml(k.key) + '</code><button class="btn-copy-token" onclick="copyText(\\'' + escapeHtml(k.key) + '\\')">Copy</button></td>' +
+            '<td>' + dateStr + '</td>' +
+            '<td>' + (k.uploads_count || 0) + '</td>' +
+            '<td><button class="btn-revoke" onclick="revokeApiKey(\\'' + escapeHtml(k.key) + '\\')">Revoke</button></td>' +
+          '</tr>';
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #cf222e; padding: 20px;">Failed to load tokens: ' + err.message + '</td></tr>';
+      }
+    }
+
+    let latestCreatedToken = '';
+    async function createNewApiKey() {
+      const nameInput = document.getElementById('new-token-name');
+      const name = nameInput.value.trim() || 'Developer Key';
+      try {
+        const res = await fetch('/admin/api/keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Creation failed');
+        nameInput.value = '';
+        latestCreatedToken = data.key;
+        document.getElementById('new-token-value').textContent = data.key;
+        document.getElementById('new-token-alert').style.display = 'block';
+        loadApiKeys();
+      } catch (err) {
+        alert('Failed to generate token: ' + err.message);
+      }
+    }
+
+    function copyCreatedToken() {
+      if (latestCreatedToken) copyText(latestCreatedToken);
+    }
+
+    async function revokeApiKey(key) {
+      if (!confirm('Are you sure you want to revoke this developer API key? Applications using it will be blocked.')) return;
+      try {
+        const res = await fetch('/admin/api/keys?key=' + encodeURIComponent(key), { method: 'DELETE' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Revoke failed');
+        loadApiKeys();
+      } catch (err) {
+        alert('Failed to revoke key: ' + err.message);
+      }
+    }
+
+    function copyText(str) {
+      navigator.clipboard.writeText(str).then(function() {
+        alert('Copied to clipboard: ' + str);
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+  
     document.addEventListener('DOMContentLoaded', () => {
       observeNewMediaItems();
       updateStats();
@@ -1707,10 +2475,14 @@ async function generateAdminPage(DATABASE) {
   <body>
     <div class="header">
       <div class="header-left">
-        <span>Showing <span id="loaded-count">${mediaData.length}</span> of <span id="total-count">${totalCount}</span> files</span>
-        <span style="margin-left: 15px;">Selected: <span id="selected-count">0</span> files</span>
+        <div class="nav-tabs">
+          <button id="tab-gallery-btn" class="nav-tab active" onclick="switchAdminTab('gallery')">📁 Media Gallery (<span id="total-count">${totalCount}</span>)</button>
+          <button id="tab-tokens-btn" class="nav-tab" onclick="switchAdminTab('tokens')">🔑 Developer API Tokens</button>
+          <a href="/docs" target="_blank" class="nav-link">📖 API Docs &rarr;</a>
+          <a href="/" target="_blank" class="nav-link">🌐 Web Uploader &rarr;</a>
+        </div>
       </div>
-      <div class="header-right hidden">
+      <div class="header-right hidden" id="gallery-actions">
         <div class="dropdown">
           <button class="copy-button">copy</button>
           <div class="dropdown-content">
@@ -1723,15 +2495,91 @@ async function generateAdminPage(DATABASE) {
         <button id="delete-button" class="delete-button" onclick="deleteSelectedImages()">delete</button>
       </div>
     </div>
-    <div class="gallery">
-      ${mediaHtml}
+
+    <!-- Gallery View -->
+    <div id="view-gallery">
+      <div style="margin-bottom: 15px; font-size: 13px; color: #656d76;">
+        <span>Showing <span id="loaded-count">${mediaData.length}</span> of <span id="total-count-label">${totalCount}</span> files</span>
+        <span style="margin-left: 15px;">Selected: <span id="selected-count">0</span> files</span>
+      </div>
+      <div class="gallery">
+        ${mediaHtml}
+      </div>
+      <div id="loading-indicator" class="loading-indicator hidden">
+        <p>Loading more files...</p>
+      </div>
+      <div id="end-message" class="end-message hidden">
+        <p>✓ All files loaded</p>
+      </div>
     </div>
-    <div id="loading-indicator" class="loading-indicator hidden">
-      <p>Loading more files...</p>
+
+    <!-- Developer Tokens View -->
+    <div id="view-tokens" class="hidden">
+      <div class="token-section">
+        <!-- Create Token Card -->
+        <div class="token-card">
+          <h3>Issue New Developer API Token</h3>
+          <p>Generate a unique API key for an external developer, mobile app, bot, or automated script.</p>
+          <div class="token-form">
+            <input type="text" id="new-token-name" class="token-input" placeholder="Developer / Application Name (e.g. Discord Bot, App Client)" />
+            <button class="btn-primary" onclick="createNewApiKey()">Generate API Token</button>
+          </div>
+          <div id="new-token-alert" class="new-token-alert">
+            <strong>Token Created!</strong> Make sure to copy it now:
+            <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+              <code id="new-token-value" class="token-code" style="font-size: 14px; padding: 6px 10px;"></code>
+              <button class="btn-copy-token" style="padding: 6px 12px;" onclick="copyCreatedToken()">Copy Token</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Tokens List -->
+        <div class="token-card">
+          <h3>Active Developer Tokens</h3>
+          <p>Developers use these tokens in the <code>X-API-Key: YOUR_TOKEN</code> header or <code>?key=YOUR_TOKEN</code> parameter.</p>
+          <div style="overflow-x: auto;">
+            <table class="token-table">
+              <thead>
+                <tr>
+                  <th>Name / Application</th>
+                  <th>API Token</th>
+                  <th>Created</th>
+                  <th>Uploads</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="tokens-table-body">
+                <tr><td colspan="5" style="text-align: center; color: #888; padding: 20px;">Loading tokens...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Developer Integration Snippets -->
+        <div class="token-card">
+          <h3>Developer Upload Examples</h3>
+          <p>Share these examples with developers so they can upload any file to your host:</p>
+          <div style="background: #1f2328; color: #e6edf3; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 12px; overflow-x: auto; margin-bottom: 10px;">
+# cURL (Upload any file: image, pdf, .bat, .txt, etc.)
+curl -X POST https://${domain}/api/upload \\
+  -H "X-API-Key: YOUR_API_TOKEN" \\
+  -F "file=@/path/to/file.pdf"
+          </div>
+          <div style="background: #1f2328; color: #e6edf3; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 12px; overflow-x: auto;">
+# Python (requests)
+import requests
+
+res = requests.post(
+    "https://${domain}/api/upload",
+    headers={"X-API-Key": "YOUR_API_TOKEN"},
+    files={"file": open("script.bat", "rb")}
+)
+print("File URL:", res.json()["url"])
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="end-message" class="end-message hidden">
-      <p>✓ All files loaded</p>
-    </div>
+
     <div class="footer">
       CommonThread Admin Panel
     </div>
@@ -1758,616 +2606,6 @@ async function fetchMediaData(DATABASE, page = 1, limit = 100) {
   // Sort by timestamp (newest first)
   mediaData.sort((a, b) => b.timestamp - a.timestamp);
   return mediaData.map(({ fileId, url }) => ({ fileId, url }));
-}
-
-async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get('file');
-    if (!file) throw new Error('Missing files');
-    if (file.size > maxSize) {
-      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-    }
-    if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-    }
-    const uploadFormData = new FormData();
-    uploadFormData.append("chat_id", TG_CHAT_ID);
-    let fileId;
-    let tgFileName = file.name;
-    if (file.type.startsWith('image/gif')) {
-      const newFileName = file.name.replace(/\.gif$/, '.jpeg');
-      const newFile = new File([file], newFileName, { type: 'image/jpeg' });
-      uploadFormData.append("document", newFile);
-      tgFileName = newFileName;
-    } else {
-      uploadFormData.append("document", file);
-    }
-    const telegramResponse = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument`, { method: 'POST', body: uploadFormData });
-    if (!telegramResponse.ok) {
-      const errorData = await telegramResponse.json();
-      throw new Error(errorData.description || 'Upload to Telegram failed');
-    }
-    const responseData = await telegramResponse.json();
-    if (responseData.result.video) fileId = responseData.result.video.file_id;
-    else if (responseData.result.document) fileId = responseData.result.document.file_id;
-    else if (responseData.result.sticker) fileId = responseData.result.sticker.file_id;
-    else if (responseData.result.audio) fileId = responseData.result.audio.file_id; // Added audio support
-    else throw new Error('There is no file in the returned data ID');
-    // Get filename from Telegram API response if available
-    let originalFileName = tgFileName;
-    if (responseData.result.document && responseData.result.document.file_name) {
-      originalFileName = responseData.result.document.file_name;
-    } else if (responseData.result.video && responseData.result.video.file_name) {
-      originalFileName = responseData.result.video.file_name;
-    } else if (responseData.result.audio && responseData.result.audio.file_name) {
-      originalFileName = responseData.result.audio.file_name;
-    }
-    const fileExtension = file.name.split('.').pop();
-    const timestamp = Date.now();
-    const imageURL = `https://${domain}/${timestamp}.${fileExtension}`;
-    await DATABASE.prepare('INSERT INTO media (url, fileId, filename) VALUES (?, ?, ?) ON CONFLICT(url) DO NOTHING').bind(imageURL, fileId, originalFileName).run();
-    const json = {
-      data: imageURL, // backward compatibility
-      url: imageURL,  // new field
-      filename: originalFileName,
-      size: file.size,
-      uploaded_on: new Date(timestamp).toISOString(),
-      media_type: file.type,
-      creator: 'https://t.me/Imagehostssbot'
-    };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-  } catch (error) {
-    console.error('Internal Server Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-  }
-}
-
-async function handleApiRegisterRequest(request, DATABASE, domain, USERNAME, PASSWORD) {
-  try {
-    if (!authenticate(request, USERNAME, PASSWORD)) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-    }
-    const data = await request.json();
-    const { fileId, originalFileName, fileExtension, fileSize, mediaType } = data;
-    if (!fileId) return new Response(JSON.stringify({ error: 'Missing fileId' }), { status: 400 });
-    
-    const timestamp = Date.now();
-    const ext = fileExtension || 'bin';
-    const imageURL = `https://${domain}/${timestamp}.${ext}`;
-    
-    await DATABASE.prepare('INSERT INTO media (url, fileId, filename) VALUES (?, ?, ?) ON CONFLICT(url) DO NOTHING')
-      .bind(imageURL, fileId, originalFileName || 'telegram_upload')
-      .run();
-      
-    const json = {
-      url: imageURL,
-      filename: originalFileName,
-      size: fileSize || 0,
-      uploaded_on: new Date(timestamp).toISOString(),
-      media_type: mediaType || 'unknown',
-      creator: 'https://t.me/Imagehostssbot'
-    };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
-  }
-}
-
-async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
-  try {
-    if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-    }
-    const url = new URL(request.url);
-    const fileUrl = url.searchParams.get('url');
-    if (!fileUrl) {
-      return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-    }
-    const fileResponse = await fetch(fileUrl);
-    if (!fileResponse.ok) {
-      return new Response(JSON.stringify({ error: 'Failed to download file from URL' }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-    }
-    const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
-    const fileName = new URL(fileUrl).pathname.split('/').pop() || 'downloaded-file';
-    const fileBuffer = await fileResponse.arrayBuffer();
-    if (fileBuffer.byteLength > maxSize) {
-      return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), { status: 413, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-    }
-    const file = new File([fileBuffer], fileName, { type: contentType });
-    const uploadFormData = new FormData();
-    uploadFormData.append("chat_id", TG_CHAT_ID);
-    let fileId;
-    let tgFileName = fileName;
-    if (contentType === 'image/gif') {
-      const newFileName = fileName.replace(/\.gif$/, '.jpeg');
-      const newFile = new File([fileBuffer], newFileName, { type: 'image/jpeg' });
-      uploadFormData.append("document", newFile);
-      tgFileName = newFileName;
-    } else {
-      uploadFormData.append("document", file);
-    }
-    // Upload to Telegram
-    const telegramResponse = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument`, { method: 'POST', body: uploadFormData });
-    if (!telegramResponse.ok) {
-      const errorData = await telegramResponse.json();
-      throw new Error(errorData.description || 'Upload to Telegram failed');
-    }
-    const responseData = await telegramResponse.json();
-    if (responseData.result.video) fileId = responseData.result.video.file_id;
-    else if (responseData.result.document) fileId = responseData.result.document.file_id;
-    else if (responseData.result.sticker) fileId = responseData.result.sticker.file_id;
-    else if (responseData.result.audio) fileId = responseData.result.audio.file_id;
-    else throw new Error('There is no file in the returned data ID');
-    // Get filename from Telegram API response if available
-    let originalFileName = tgFileName;
-    if (responseData.result.document && responseData.result.document.file_name) {
-      originalFileName = responseData.result.document.file_name;
-    } else if (responseData.result.video && responseData.result.video.file_name) {
-      originalFileName = responseData.result.video.file_name;
-    } else if (responseData.result.audio && responseData.result.audio.file_name) {
-      originalFileName = responseData.result.audio.file_name;
-    }
-    const fileExtension = fileName.split('.').pop();
-    const timestamp = Date.now();
-    const imageURL = `https://${domain}/${timestamp}.${fileExtension}`;
-    await DATABASE.prepare('INSERT INTO media (url, fileId, filename) VALUES (?, ?, ?) ON CONFLICT(url) DO NOTHING').bind(imageURL, fileId, originalFileName).run();
-    const json = {
-      data: imageURL, // backward compatibility
-      url: imageURL,  // new field
-      filename: originalFileName,
-      size: fileBuffer.byteLength,
-      uploaded_on: new Date(timestamp).toISOString(),
-      media_type: contentType,
-      creator: 'https://t.me/Imagehostssbot'
-    };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-  } catch (error) {
-    console.error('Internal Server Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Powered-By': 'Cloudflare Workers + CommonThread API', 'X-API-Version': '6.0', 'X-Creator': 'https://t.me/Imagehostssbot' } });
-  }
-}
-
-async function handleImageRequest(request, DATABASE, TG_BOT_TOKEN) {
-  const requestedUrl = request.url;
-  const cache = caches.default;
-  const cacheKey = new Request(requestedUrl);
-  const cachedResponse = await cache.match(cacheKey);
-  if (cachedResponse) return cachedResponse;
-  const result = await DATABASE.prepare('SELECT fileId, filename FROM media WHERE url = ?').bind(requestedUrl).first();
-  if (!result) {
-    const notFoundHtml = `
-    <html lang="en"><head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src * data: blob:; script-src 'self' https: 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; font-src 'self' https: data:; connect-src *; base-uri 'self'; object-src 'none'; form-action 'self'">
-    <meta name="robots" content="noindex">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>404 - Page Not Found | CommonThread</title>
-    <link rel="icon" href="https://api.iconify.design/lucide:link.svg">
-  
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="preload" as="style" onload="this.rel='stylesheet'">
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"></noscript>
-  
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
-  </head>
-  
-  <body class="min-h-screen bg-black text-zinc-200 antialiased selection:bg-orange-300/10 selection:text-orange-200" style="
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
-      background-attachment: fixed;
-      background-image:
-        radial-gradient(1000px 600px at 12% 10%, rgba(251,146,60,0.14), transparent 60%),
-        radial-gradient(900px 600px at 88% 78%, rgba(253,186,116,0.10), transparent 62%),
-        radial-gradient(750px 500px at 50% 105%, rgba(244,63,94,0.10), transparent 65%),
-        linear-gradient(to bottom, rgba(0,0,0,1), rgba(0,0,0,1));
-    ">
-    <!-- Ambient grid -->
-    <div class="fixed inset-0 -z-10">
-      <div class="absolute inset-0 opacity-[0.18]" style="background-image: radial-gradient(rgba(255,255,255,0.10) 1px, transparent 1px); background-size: 1.25rem 1.25rem;"></div>
-      <div class="absolute inset-0 opacity-60" style="mask-image: radial-gradient(60% 55% at 50% 35%, black 60%, transparent 100%); background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,1));"></div>
-    </div>
-  
-    <!-- Top Nav -->
-    <header class="fixed inset-x-0 top-0 z-50">
-      <nav id="top-nav" class="mx-auto flex items-center justify-between px-4 md:px-6 py-3 backdrop-blur-xl bg-black/60 border-b border-white/10 transition-all duration-300">
-        <a href="/" class="group inline-flex items-center gap-3">
-          <img src="https://api.iconify.design/lucide:link.svg" alt="CommonThread" class="h-9 w-9 rounded-full ring-1 ring-white/10">
-          <span class="text-lg font-semibold tracking-tight text-transparent bg-clip-text" style="background-image: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1), rgba(244,63,94,0.95));">CommonThread</span>
-        </a>
-  
-        <div class="flex items-center gap-2">
-          <a href="/docs" class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-200 hover:text-orange-200 hover:bg-white/[0.05] ring-1 ring-white/10 hover:ring-orange-300/25 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">
-            <span class="iconify h-4 w-4" data-icon="lucide:book-open-text"></span>
-            <span>API Docs</span>
-          </a>
-        </div>
-      </nav>
-    </header>
-  
-    <main class="relative">
-      <!-- Decorative glows -->
-      <div class="pointer-events-none absolute inset-0 overflow-hidden">
-        <div class="absolute -top-36 -left-28 h-72 w-72 rounded-full blur-3xl opacity-70" style="background: radial-gradient(circle at 35% 35%, rgba(251,146,60,0.35), transparent 60%);">
-        </div>
-        <div class="absolute -bottom-40 -right-32 h-80 w-80 rounded-full blur-3xl opacity-70" style="background: radial-gradient(circle at 35% 35%, rgba(244,63,94,0.26), transparent 60%);">
-        </div>
-      </div>
-  
-      <section class="relative mx-auto max-w-3xl px-4 md:px-6 pt-28 pb-10">
-        <div class="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl shadow-2xl shadow-black/40 ring-1 ring-white/10 overflow-hidden">
-          <div class="relative p-6 sm:p-10">
-            <div class="absolute inset-0 opacity-70 pointer-events-none" style="background:
-                radial-gradient(900px 400px at 10% 0%, rgba(251,146,60,0.10), transparent 55%),
-                radial-gradient(900px 400px at 95% 30%, rgba(253,186,116,0.07), transparent 55%);
-              ">
-            </div>
-  
-            <!-- 404 badge -->
-            <div class="relative flex items-center justify-center">
-              <div class="absolute -inset-x-10 -top-6 -bottom-6">
-                <div class="h-full w-full rounded-3xl blur-2xl" style="background: linear-gradient(135deg, rgba(251,146,60,0.12), rgba(244,63,94,0.10));">
-                </div>
-              </div>
-  
-              <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-black/50 px-4 py-2 text-zinc-300 ring-1 ring-white/10">
-                <span class="inline-flex h-2.5 w-2.5 rounded-full ring-4 ring-orange-300/10" style="background: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1));">
-                </span>
-                <span class="text-xs font-medium">Error</span>
-                <span class="h-4 w-px bg-white/10"></span>
-                <span class="text-xs font-semibold tracking-tight text-zinc-100">404</span>
-              </div>
-            </div>
-  
-            <div class="mt-6 text-center relative">
-              <p class="text-6xl sm:text-7xl font-semibold tracking-tight text-transparent bg-clip-text leading-none" style="background-image: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1), rgba(244,63,94,0.95));">
-                404
-              </p>
-  
-              <h1 class="mt-4 text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-50">
-                Page not found
-              </h1>
-  
-              <p class="mt-3 text-sm sm:text-base text-zinc-400">
-                This page doesn’t exist—or it’s been moved. Check the address and try again.
-              </p>
-            </div>
-  
-            <!-- Actions -->
-            <div class="mt-8 flex flex-wrap items-center justify-center gap-3 relative">
-              <a href="/" class="group relative inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-black font-semibold tracking-tight ring-1 ring-white/10 shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30" style="background-image: linear-gradient(90deg, rgba(253,186,116,1), rgba(251,146,60,1));">
-                <span class="absolute -inset-px rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300" style="background: radial-gradient(180px 70px at 35% 15%, rgba(255,255,255,0.35), transparent 70%);">
-                </span>
-                <span class="iconify relative h-4 w-4" data-icon="lucide:home"></span>
-                <span class="relative">Return home</span>
-              </a>
-  
-              <a href="/docs" class="inline-flex items-center gap-2 rounded-lg bg-white/[0.04] px-4 py-2.5 text-zinc-100 font-medium ring-1 ring-white/10 hover:bg-white/[0.07] hover:ring-orange-300/25 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30">
-                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:book"></span>
-                <span>View documentation</span>
-              </a>
-  
-              <button id="copy-url" class="inline-flex items-center gap-2 rounded-lg bg-white/[0.04] px-4 py-2.5 text-zinc-100 font-medium ring-1 ring-white/10 hover:bg-white/[0.07] hover:ring-orange-300/25 transition-all focus:outline-none focus:ring-2 focus:ring-orange-300/30">
-                <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:copy"></span>
-                <span>Copy requested URL</span>
-              </button>
-            </div>
-  
-            <!-- Suggestions -->
-            <div class="mt-9 relative">
-              <h2 class="text-base sm:text-lg font-semibold tracking-tight text-zinc-50 text-center">What can you do?</h2>
-              <ul class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <li class="group rounded-lg border border-white/10 bg-white/[0.04] p-4 hover:bg-white/[0.07] hover:border-orange-300/25 transition-colors">
-                  <div class="flex items-start gap-3">
-                    <div class="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-md bg-orange-300/10 text-orange-200 ring-1 ring-orange-300/20">
-                      <span class="iconify h-4 w-4" data-icon="lucide:search"></span>
-                    </div>
-                    <div class="flex-1">
-                      <p class="text-sm font-medium text-zinc-50">Check the URL</p>
-                      <p class="text-sm text-zinc-400">Make sure there are no typos in the address.</p>
-                    </div>
-                  </div>
-                </li>
-  
-                <li class="group rounded-lg border border-white/10 bg-white/[0.04] p-4 hover:bg-white/[0.07] hover:border-orange-300/25 transition-colors">
-                  <div class="flex items-start gap-3">
-                    <div class="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-md bg-orange-300/10 text-orange-200 ring-1 ring-orange-300/20">
-                      <span class="iconify h-4 w-4" data-icon="lucide:arrow-left"></span>
-                    </div>
-                    <div class="flex-1">
-                      <a href="javascript:history.back()" class="text-sm font-medium text-orange-200 hover:text-orange-100 transition-colors underline underline-offset-4 decoration-white/15">Go back</a>
-                      <p class="text-sm text-zinc-400">Return to the previous page.</p>
-                    </div>
-                  </div>
-                </li>
-  
-                <li class="group rounded-lg border border-white/10 bg-white/[0.04] p-4 hover:bg-white/[0.07] hover:border-orange-300/25 transition-colors sm:col-span-2">
-                  <div class="flex items-start gap-3">
-                    <div class="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-md bg-orange-300/10 text-orange-200 ring-1 ring-orange-300/20">
-                      <span class="iconify h-4 w-4" data-icon="lucide:help-circle"></span>
-                    </div>
-                    <div class="flex-1">
-                      <p class="text-sm font-medium text-zinc-50">Need help?</p>
-                      <p class="text-sm text-zinc-400">
-                        Visit our
-                        <a href="https://t.me/Imagehostssbot" class="text-orange-200 hover:text-orange-100 underline underline-offset-4 decoration-white/15">TG Channel</a>
-                        for assistance.
-                      </p>
-                    </div>
-                  </div>
-                </li>
-              </ul>
-            </div>
-  
-            <!-- Technical details -->
-            <div class="mt-8 border-t border-white/10 pt-6 relative">
-              <div class="flex items-center justify-between gap-3">
-                <h3 class="text-sm font-semibold tracking-tight text-zinc-100/90">Technical details</h3>
-                <button id="refresh-details" class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-zinc-200 bg-white/[0.03] ring-1 ring-white/10 hover:bg-white/[0.06] hover:ring-orange-300/25 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-300/30">
-                  <span class="iconify h-4 w-4 text-orange-200" data-icon="lucide:refresh-ccw"></span>
-                  Refresh
-                </button>
-              </div>
-  
-              <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="flex items-start justify-between gap-4 rounded-lg bg-white/[0.04] p-3 ring-1 ring-white/10">
-                  <div class="inline-flex items-center gap-2 text-zinc-300">
-                    <span class="iconify h-4 w-4" data-icon="lucide:link"></span>
-                    <span class="text-xs font-medium">Requested URL</span>
-                  </div>
-                  <div id="page-url" class="max-w-[65%] text-right text-xs text-zinc-400 break-words"></div>
-                </div>
-  
-                <div class="flex items-start justify-between gap-4 rounded-lg bg-white/[0.04] p-3 ring-1 ring-white/10">
-                  <div class="inline-flex items-center gap-2 text-zinc-300">
-                    <span class="iconify h-4 w-4" data-icon="lucide:clock"></span>
-                    <span class="text-xs font-medium">Timestamp</span>
-                  </div>
-                  <div id="date-time" class="max-w-[65%] text-right text-xs text-zinc-400 break-words"></div>
-                </div>
-  
-                <div class="flex items-start justify-between gap-4 rounded-lg bg-white/[0.04] p-3 ring-1 ring-white/10">
-                  <div class="inline-flex items-center gap-2 text-zinc-300">
-                    <span class="iconify h-4 w-4" data-icon="lucide:network"></span>
-                    <span class="text-xs font-medium">Your IP</span>
-                  </div>
-                  <div id="user-ip" class="max-w-[65%] text-right text-xs text-zinc-400 break-words">Loading…</div>
-                </div>
-  
-                <div class="flex items-start justify-between gap-4 rounded-lg bg-white/[0.04] p-3 ring-1 ring-white/10">
-                  <div class="inline-flex items-center gap-2 text-zinc-300">
-                    <span class="iconify h-4 w-4" data-icon="lucide:map-pin"></span>
-                    <span class="text-xs font-medium">Location</span>
-                  </div>
-                  <div id="user-location" class="max-w-[65%] text-right text-xs text-zinc-400 break-words">Detecting…</div>
-                </div>
-              </div>
-            </div>
-  
-          </div>
-        </div>
-      </section>
-    </main>
-  
-    <footer class="fixed inset-x-0 bottom-0 z-40">
-      <div class="mx-auto w-full px-4 md:px-6 py-3 backdrop-blur-xl bg-black/60 border-t border-white/10">
-        <p class="text-center text-xs text-zinc-400">
-          © 2025 <a href="/" class="text-orange-200 hover:text-orange-100 transition-colors font-medium">CommonThread</a>
-        </p>
-      </div>
-    </footer>
-  
-    <!-- Toast -->
-    <div id="toast" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-[70] pointer-events-none hidden">
-      <div class="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white/[0.06] backdrop-blur-xl px-4 py-2 ring-1 ring-white/10 shadow-2xl shadow-black/40">
-        <span id="toast-icon" class="iconify h-4 w-4 text-orange-200" data-icon="lucide:check"></span>
-        <span id="toast-text" class="text-sm font-medium text-zinc-200">Copied</span>
-      </div>
-    </div>
-  
-    <script>
-      document.addEventListener('DOMContentLoaded', function () {
-        // Ensure Lucide stroke width = 1.5 for Iconify-injected SVGs
-        const setLucideStroke = () => {
-          document.querySelectorAll('svg').forEach(svg => {
-            try { svg.setAttribute('stroke-width', '1.5'); } catch (e) {}
-          });
-        };
-        setLucideStroke();
-        setTimeout(setLucideStroke, 50);
-  
-        const nav = document.getElementById('top-nav');
-        const onScroll = () => {
-          const y = window.scrollY || 0;
-          if (y > 8) {
-            nav.classList.add('shadow-lg','shadow-black/30');
-            nav.classList.remove('bg-black/60');
-            nav.classList.add('bg-black/70');
-          } else {
-            nav.classList.remove('shadow-lg','shadow-black/30');
-            nav.classList.add('bg-black/60');
-            nav.classList.remove('bg-black/70');
-          }
-        };
-        onScroll();
-        window.addEventListener('scroll', onScroll, { passive: true });
-  
-        const urlEl = document.getElementById('page-url');
-        const timeEl = document.getElementById('date-time');
-        const ipEl = document.getElementById('user-ip');
-        const locEl = document.getElementById('user-location');
-  
-        const toast = document.getElementById('toast');
-        const toastText = document.getElementById('toast-text');
-        const toastIcon = document.getElementById('toast-icon');
-        let toastTimer = null;
-  
-        const showToast = (text, icon) => {
-          if (!toast) return;
-          toastText.textContent = text;
-          toastIcon.setAttribute('data-icon', icon || 'lucide:check');
-          toast.classList.remove('hidden');
-          toast.classList.add('opacity-0');
-          requestAnimationFrame(() => {
-            toast.classList.remove('opacity-0');
-            toast.classList.add('transition-opacity','duration-200','opacity-100');
-          });
-          clearTimeout(toastTimer);
-          toastTimer = setTimeout(() => {
-            toast.classList.add('opacity-0');
-            setTimeout(() => toast.classList.add('hidden'), 200);
-          }, 1200);
-          setLucideStroke();
-        };
-  
-        const setUrl = () => {
-          try {
-            const url = window.location.pathname + window.location.search + window.location.hash;
-            urlEl.textContent = url || '/';
-          } catch {
-            urlEl.textContent = '/';
-          }
-        };
-  
-        const setTime = () => {
-          try {
-            const now = new Date();
-            timeEl.textContent = now.toLocaleString(undefined, {
-              year: 'numeric',
-              month: 'short',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-              timeZoneName: 'short'
-            });
-          } catch {
-            timeEl.textContent = new Date().toISOString();
-          }
-        };
-  
-        const loadIP = () => {
-          ipEl.textContent = 'Loading…';
-          locEl.textContent = 'Detecting…';
-  
-          fetch('https://ipapi.co/json/')
-            .then(r => r.ok ? r.json() : Promise.reject(new Error('Network error')))
-            .then(data => {
-              ipEl.textContent = data?.ip || 'Unknown';
-              const parts = [];
-              if (data?.city) parts.push(data.city);
-              if (data?.region) parts.push(data.region);
-              if (data?.country_name) parts.push(data.country_name);
-              let loc = parts.join(', ') || 'Unknown';
-              locEl.textContent = loc;
-            })
-            .catch(() => {
-              ipEl.textContent = 'Unknown';
-              locEl.textContent = 'Unknown';
-            });
-        };
-  
-        setUrl();
-        setTime();
-        loadIP();
-  
-        const copyBtn = document.getElementById('copy-url');
-        if (copyBtn) {
-          copyBtn.addEventListener('click', async () => {
-            const text = (urlEl?.textContent || '').trim() || '/';
-            try {
-              await navigator.clipboard.writeText(text);
-              showToast('Copied requested URL', 'lucide:check');
-            } catch (e) {
-              showToast('Copy failed', 'lucide:alert-triangle');
-            }
-          });
-        }
-  
-        const refreshBtn = document.getElementById('refresh-details');
-        if (refreshBtn) {
-          refreshBtn.addEventListener('click', () => {
-            setTime();
-            loadIP();
-            showToast('Details refreshed', 'lucide:refresh-ccw');
-          });
-        }
-      });
-    </script>
-  
-  </body></html>
-    `;
-
-    const notFoundResponse = new Response(notFoundHtml, {
-      status: 404,
-      headers: { 'Content-Type': 'text/html' }
-    });
-
-    await cache.put(cacheKey, notFoundResponse.clone());
-    return notFoundResponse;
-  }
-  const fileId = result.fileId;
-  let filePath;
-  let attempts = 0;
-  const maxAttempts = 3;
-  while (attempts < maxAttempts) {
-    const getFilePath = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/getFile?file_id=${fileId}`);
-    if (!getFilePath.ok) {
-      return new Response('getFile request failed', { status: 500 });
-    }
-    const fileData = await getFilePath.json();
-    if (fileData.ok && fileData.result.file_path) {
-      filePath = fileData.result.file_path;
-      break;
-    }
-    attempts++;
-  }
-  if (!filePath) {
-    const notFoundResponse = new Response('FilePath not found', { status: 404 });
-    await cache.put(cacheKey, notFoundResponse.clone());
-    return notFoundResponse;
-  }
-  const getFileResponse = `https://api.telegram.org/file/bot${TG_BOT_TOKEN}/${filePath}`;
-  const response = await fetch(getFileResponse);
-  if (!response.ok) {
-    return new Response('Failed to obtain file content', { status: 500 });
-  }
-  const fileExtension = requestedUrl.split('.').pop().toLowerCase();
-  let contentType = 'text/plain';
-  if (fileExtension === 'jpg' || fileExtension === 'jpeg') contentType = 'image/jpeg';
-  if (fileExtension === 'png') contentType = 'image/png';
-  if (fileExtension === 'gif') contentType = 'image/gif';
-  if (fileExtension === 'webp') contentType = 'image/webp';
-  if (fileExtension === 'mp4') contentType = 'video/mp4';
-  if (fileExtension === 'pdf') contentType = 'application/pdf';
-  if (fileExtension === 'txt') contentType = 'text/plain';
-  if (fileExtension === 'json') contentType = 'application/json';
-  if (fileExtension === 'csv') contentType = 'text/csv';
-  if (fileExtension === 'html') contentType = 'text/html';
-  if (fileExtension === 'css') contentType = 'text/css';
-  if (fileExtension === 'js') contentType = 'application/javascript';
-  if (fileExtension === 'xml') contentType = 'application/xml';
-  if (fileExtension === 'svg') contentType = 'image/svg+xml';
-  if (fileExtension === 'zip') contentType = 'application/zip';
-  if (fileExtension === 'mp3') contentType = 'audio/mpeg';
-  if (fileExtension === 'wav') contentType = 'audio/wav';
-  const headers = new Headers(response.headers);
-  headers.set('Content-Type', contentType);
-
-  // Force download for executable file types (HTML, JS, CSS, XML, SVG) to prevent malware execution
-  // Keep inline for safe media types (images, videos, audio, PDF, text, JSON, CSV)
-  const executableExtensions = ['html', 'htm', 'js', 'css', 'xml', 'svg'];
-  const shouldForceDownload = executableExtensions.includes(fileExtension);
-
-  if (shouldForceDownload) {
-    // Force download for potentially dangerous file types
-    headers.set('Content-Disposition', result.filename ? `attachment; filename=\"${result.filename}\"` : 'attachment');
-  } else {
-    // Display inline for safe media types
-    headers.set('Content-Disposition', result.filename ? `inline; filename=\"${result.filename}\"` : 'inline');
-  }
-  const responseToCache = new Response(response.body, { status: response.status, headers });
-  await cache.put(cacheKey, responseToCache.clone());
-  return responseToCache;
 }
 
 async function handleBingImagesRequest(request) {

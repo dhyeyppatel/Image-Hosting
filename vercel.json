@@ -20,8 +20,36 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.py"
+      "source": "/upload",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/upload"
+    },
+    {
+      "source": "/hosturl",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/hosturl"
+    },
+    {
+      "source": "/v/(.*)",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/v/$1"
+    },
+    {
+      "source": "/api/1/upload",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/api/1/upload"
+    },
+    {
+      "source": "/api/upload",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/api/upload"
+    },
+    {
+      "source": "/api/sharex",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/api/sharex"
+    },
+    {
+      "source": "/api/info",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/api/info"
+    },
+    {
+      "source": "/api/delete",
+      "destination": "https://media-hosting.dhyeyp254.workers.dev/api/delete"
     },
     {
       "source": "/admin(.*)",
@@ -30,6 +58,10 @@
     {
       "source": "/docs(.*)",
       "destination": "https://media-hosting.dhyeyp254.workers.dev/docs$1"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
     }
   ]
 }

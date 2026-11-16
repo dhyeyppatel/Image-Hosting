@@ -64,9 +64,10 @@ def webhook():
         if "text" in message and message["text"].startswith("/start"):
             welcome_text = (
                 "<b>👋 Welcome to CommonThread Media Host!</b>\n\n"
-                "I am your lightning-fast, edge-cached media hosting assistant. "
-                "Send me any photo, video, or document and I will instantly upload it and provide you with a direct hosting link.\n\n"
-                "<i>Max file size: 50MB</i>"
+                "I am your lightning-fast, edge-cached media hosting assistant.\n"
+                "Send me any image, video, audio, PDF, document, text, or script (.bat, .sh, etc.) "
+                "and I will instantly host it and provide direct and viewer links!\n\n"
+                "<i>Max file size: 20MB (Telegram API limit)</i>"
             )
             reply_markup = {
                 "inline_keyboard": [
@@ -124,7 +125,7 @@ def webhook():
             
             reply_markup = {
                 "inline_keyboard": [
-                    [{"text": "↗️ Open File", "url": hosted_url}, {"text": "🔗 Share", "url": f"https://t.me/share/url?url={hosted_url}"}]
+                    [{"text": "↗️ Open File", "url": hosted_url}, {"text": "🔗 Share Link", "url": f"https://t.me/share/url?url={hosted_url}"}]
                 ]
             }
             

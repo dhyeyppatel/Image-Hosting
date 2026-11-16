@@ -1,324 +1,223 @@
-# 🚀 Dhyey Space — Telegram-Powered Image Hosting
+<div align="center">
 
-> A production-ready, open-source image hosting platform built with **FastAPI**, **MongoDB Atlas**, and **Telegram** as the storage backend.
+# 🚀 CommonThread
 
-**Live demo:** [https://image.dhyey.space](https://eligible-kissie-dhyey-bd978350.koyeb.app/)
+**A high-performance, serverless universal media hosting platform & developer API built on Cloudflare Pages/Workers, backed by Telegram Cloud Storage and Cloudflare D1.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+[![Cloudflare Pages](https://img.shields.io/badge/Cloudflare-Pages%20%26%20Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://pages.cloudflare.com/)
+[![Cloudflare D1](https://img.shields.io/badge/Database-Cloudflare%20D1-F38020?style=for-the-badge&logo=sqlite&logoColor=white)](https://developers.cloudflare.com/d1/)
+[![Telegram Bot API](https://img.shields.io/badge/Storage-Telegram%20Bot%20API-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://core.telegram.org/bots/api)
+
+<br/>
+
+[**Web Uploader**](https://media-hosting.dhyeyp254.workers.dev/) • [**Developer API Docs**](https://media-hosting.dhyeyp254.workers.dev/docs) • [**ShareX Config**](https://media-hosting.dhyeyp254.workers.dev/api/sharex) • [**Telegram Bot**](https://t.me/Imagehostssbot) • [**Deployment Guide**](#-deployment-guide) • [**Developer API Reference**](#-developer-api-reference)
+
+</div>
+
+---
+
+## 📖 Overview
+
+**CommonThread** provides a free, unlimited cloud file and media hosting service with a dedicated **Developer API**. It allows developers to integrate file uploads directly into their own applications, websites, bots, and tools for **any file format** (Images, PDFs, Videos, Audio, `.txt`, `.bat`, `.sh`, documents, archives, etc.).
+
+Powered by **Cloudflare Workers / Pages** at the edge and **Cloudflare D1 (Serverless SQLite)** for metadata indexing, CommonThread delivers instant uploads, global edge caching, and direct file delivery.
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+    Client([👤 App / Website / Python / cURL / Bot]) -->|POST /api/upload| CF[⚡ Cloudflare Worker]
+    CF -->|Insert URL Mapping| D1[(🗄️ Cloudflare D1)]
+    CF -->|sendDocument / getFile| TG[☁️ Telegram Storage]
+    CF -->|Cache Response| Cache[(🚀 Global Edge Cache)]
+```
+
+* **Core Engine (Cloudflare)**: Runs `_worker.js` on Cloudflare Workers/Pages with D1 database binding, handling media ingestion, range streaming, edge caching, and developer APIs.
+* **Telegram Storage**: Private Telegram channel used as a high-capacity, zero-cost storage backend.
+* **Telegram Bot (Vercel)**: Runs `api/index.py` on Vercel as a webhook to let Telegram users upload files directly from Telegram chat and receive direct hosting URLs.
 
 ---
 
 ## ✨ Features
 
-| Feature | Description |
-|---|---|
-| 📸 Upload images | JPG, PNG, WEBP, GIF — up to 20 MB |
-| 🔗 Human-readable URLs | `dhyey.space/i/silent-bucket` |
-| 🌐 Direct image links | `dhyey.space/img/silent-bucket` |
-| ⬇️ Download | Original filename preserved |
-| 👁️ View counter | Atomic view tracking in MongoDB |
-| 🔒 Secure storage | Bot token never exposed |
-| 📱 OpenGraph + Twitter Cards | Discord, Slack, Twitter unfurls |
-| 🌙 Dark / Light mode | Auto-detects system preference |
-| 📋 Copy buttons | Page link, direct link, HTML, Markdown |
-| 🚦 Rate limiting | Per-IP upload throttling |
-| 🏥 Health check | `/health` for Koyeb monitoring |
+- ⚡ **Developer-First API (`POST /api/upload`)**: Upload any file from your own apps, websites, or scripts with one HTTP call.
+- 📁 **Universal Format Support**: Host any file type:
+  - **Images**: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.bmp`, `.ico`
+  - **Documents**: `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.txt`, `.csv`
+  - **Scripts & Code**: `.bat`, `.cmd`, `.sh`, `.ps1`, `.py`, `.js`, `.json`, `.xml`, `.log`
+  - **Videos & Audio**: `.mp4`, `.webm`, `.mp3`, `.wav` (with native HTTP `Range` streaming)
+  - **Archives & Binaries**: `.zip`, `.rar`, `.7z`, `.exe`, `.msi`, `.apk`
+- 🚀 **Global Edge Caching**: Sub-millisecond media delivery via Cloudflare Edge Cache.
+- 🔒 **Security Hardened**:
+  - **Anti-XSS**: Script and executable files (`.bat`, `.sh`, `.exe`, `.html`, `.svg`) are served as direct attachments on the web to prevent Stored XSS.
+  - **SSRF Hardened**: Remote URL ingestion validates protocols and blocks loopback, private IPv4 subnets, and cloud metadata IPs.
+  - **OOM Defense**: Size checked prior to memory buffering.
+- 🤖 **Telegram Bot Integration**: Deploy the Flask webhook on Vercel to allow direct Telegram uploads.
 
 ---
 
-## 🗂️ Project Structure
+## 📡 Developer API Reference
 
-```
-dhyey-space/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI entry point
-│   ├── config.py            # Pydantic settings
-│   ├── database.py          # MongoDB connection
-│   ├── models.py            # Pydantic data models
-│   ├── telegram_storage.py  # Telegram Bot API integration
-│   ├── slug_generator.py    # Adjective-noun slug generator
-│   ├── routes/
-│   │   ├── health.py        # GET /health
-│   │   ├── pages.py         # GET / and GET /i/{slug}
-│   │   ├── upload.py        # POST /upload
-│   │   └── images.py        # GET /img/{slug} and /download/{slug}
-│   ├── services/
-│   │   └── image_service.py # Business logic layer
-│   └── utils/
-│       └── file_validation.py # MIME detection, sanitization
-├── templates/
-│   ├── home.html
-│   ├── image.html
-│   └── 404.html
-├── static/
-│   ├── css/style.css
-│   └── js/
-│       ├── upload.js
-│       └── image.js
-├── wordlists/
-│   ├── adjectives.txt       # ~200 adjectives
-│   └── nouns.txt            # ~300 nouns
-├── requirements.txt
-├── Procfile
-├── runtime.txt
-└── .env.example
-```
+### Upload File (`POST /api/upload`)
 
----
+Upload any file from your app or project to get a direct hosted URL.
 
-## 🛠️ Prerequisites
+- **Endpoint**: `https://<YOUR_DOMAIN>/api/upload`
+- **Method**: `POST`
+- **Headers**:
+  - `Content-Type: multipart/form-data`
+  - `X-API-Key: <YOUR_DEVELOPER_TOKEN>` *(or Bearer token in `Authorization: Bearer <YOUR_DEVELOPER_TOKEN>`, or query `?key=<YOUR_DEVELOPER_TOKEN>`)*
+- **Parameters**:
+  - `file`: The binary file to upload (any format: image, pdf, .txt, .bat, audio, video).
+  - *(or JSON body with `{"url": "https://example.com/file.png"}` for remote URL mirroring)*
 
-- Python 3.11+
-- A **MongoDB Atlas** free tier cluster
-- A **Telegram Bot** (via @BotFather)
-- A **private Telegram channel** with the bot as administrator
-
----
-
-## 📦 Setup — Step by Step
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/dhyey-space.git
-cd dhyey-space
-```
-
-### 2. Create a Virtual Environment
-
-```bash
-python -m venv venv
-source venv/bin/activate       # Linux/macOS
-venv\Scripts\activate          # Windows
-```
-
-### 3. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment Variables
-
-```bash
-cp .env.example .env
-# Edit .env with your actual credentials
-```
-
----
-
-## 🤖 Telegram Bot Setup
-
-### Step 1 — Create the Bot
-
-1. Open Telegram and search for **@BotFather**
-2. Send `/newbot`
-3. Follow the prompts to name your bot
-4. Copy the **bot token** — this is your `BOT_TOKEN`
-
-### Step 2 — Create the Storage Channel
-
-1. Create a **private Telegram channel**
-2. Add your bot as a **channel administrator** with permission to post messages
-3. Get the channel ID:
-   - Forward any message from the channel to **@userinfobot**
-   - The channel ID will look like `-1001234567890`
-   - This is your `STORAGE_CHANNEL_ID`
-
----
-
-## 🍃 MongoDB Atlas Setup
-
-### Step 1 — Create a Cluster
-
-1. Go to [MongoDB Atlas](https://www.mongodb.com/atlas)
-2. Create a free **M0 Shared** cluster
-3. Create a database user with read/write access
-4. Whitelist **0.0.0.0/0** (all IPs) for Koyeb
-
-### Step 2 — Get Connection String
-
-1. Click **Connect → Drivers**
-2. Copy the connection string
-3. Replace `<password>` with your database user's password
-4. This is your `MONGO_URI`
-
-The database (`dhyey_space`) and collection (`images`) are created automatically on first run.
-
----
-
-## 🔐 Environment Variables Reference
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `MONGO_URI` | ✅ | — | MongoDB Atlas connection string |
-| `BOT_TOKEN` | ✅ | — | Telegram bot token from @BotFather |
-| `STORAGE_CHANNEL_ID` | ✅ | — | Private channel ID (negative integer) |
-| `BASE_URL` | ✅ | `https://dhyey.space` | Public URL of your deployment |
-| `SECRET_KEY` | ✅ | — | Random string for internal signing |
-| `MAX_UPLOAD_SIZE_MB` | ❌ | `20` | Maximum file size in MB |
-| `RATE_LIMIT_UPLOADS_PER_MINUTE` | ❌ | `10` | Per-IP upload rate limit |
-| `LOG_LEVEL` | ❌ | `INFO` | Logging level |
-
----
-
-## 🚀 Local Development
-
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-Open: http://localhost:8000
-
-> **Note:** Set `BASE_URL=http://localhost:8000` in your `.env` for correct URL generation locally.
-
----
-
-## ☁️ Koyeb Deployment
-
-### Step 1 — Push to GitHub
-
-```bash
-git add .
-git commit -m "Initial commit"
-git push origin main
-```
-
-### Step 2 — Create a Koyeb App
-
-1. Go to [Koyeb Dashboard](https://app.koyeb.com)
-2. Click **Create App → GitHub**
-3. Select your repository
-
-### Step 3 — Configure the Service
-
-| Setting | Value |
-|---|---|
-| **Build command** | `pip install -r requirements.txt` |
-| **Run command** | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| **Port** | `8000` |
-| **Health check path** | `/health` |
-
-### Step 4 — Add Environment Variables
-
-In the Koyeb dashboard, add all variables from `.env.example`:
-
-- `MONGO_URI`
-- `BOT_TOKEN`
-- `STORAGE_CHANNEL_ID`
-- `BASE_URL` (your Koyeb/custom domain URL)
-- `SECRET_KEY`
-- `MAX_UPLOAD_SIZE_MB`
-
-### Step 5 — Custom Domain
-
-1. In Koyeb, go to **Domains → Add Domain**
-2. Add `dhyey.space` and `www.dhyey.space`
-3. Set DNS records as instructed by Koyeb
-
----
-
-## 📡 API Reference
-
-### `POST /upload`
-
-Upload an image.
-
-**Form data:** `file` (multipart)
-
-**Response:**
+#### Response (`200 OK`)
 ```json
 {
   "success": true,
-  "slug": "silent-bucket",
-  "page_url": "https://dhyey.space/i/silent-bucket",
-  "direct_url": "https://dhyey.space/img/silent-bucket"
+  "url": "https://media-hosting.dhyeyp254.workers.dev/1794851338016_im104h.bat",
+  "filename": "my_script.bat",
+  "size": 1024,
+  "size_formatted": "1.00 KB",
+  "mime_type": "application/x-bat",
+  "uploaded_at": "2026-11-16T17:48:00.000Z"
 }
 ```
 
-**Error codes:**
-- `400` — Validation error (unsupported type, empty file)
-- `413` — File too large
-- `429` — Rate limit exceeded
-- `500` — Server error
+---
+
+### 🔑 Issuing Developer API Tokens
+
+You can issue tokens to other developers so they can use your platform in their apps, bots, or websites:
+
+1. Go to your Admin Dashboard (`https://<YOUR_DOMAIN>/admin`).
+2. Click on the **"🔑 Developer API Tokens"** tab.
+3. Enter the developer or app name (e.g. `Client Mobile App`, `Discord Bot`) and click **"Generate API Token"**.
+4. Copy the generated key (e.g. `ct_dev_...`) and hand it to the developer!
+5. Developers pass this token with their upload requests using either:
+   - Header: `X-API-Key: YOUR_TOKEN`
+   - Header: `Authorization: Bearer YOUR_TOKEN`
+   - Query: `?key=YOUR_TOKEN`
+   - Form-data: `key=YOUR_TOKEN`
 
 ---
 
-### `GET /img/{slug}`
+### Integration Examples
 
-Return raw image bytes. Suitable for:
-- HTML `<img src="...">` tags
-- Markdown `![](...)` embeds
-- Discord / Telegram unfurls
+#### 1. Python (`requests`)
+```python
+import requests
 
-**Headers returned:**
-- `Content-Type: image/jpeg` (or appropriate MIME)
-- `Cache-Control: public, max-age=31536000, immutable`
+url = "https://media-hosting.dhyeyp254.workers.dev/api/upload"
+headers = {"X-API-Key": "YOUR_DEVELOPER_TOKEN"}
 
----
+# Upload any file: .bat, .pdf, .png, .txt, etc.
+with open("my_script.bat", "rb") as f:
+    response = requests.post(url, headers=headers, files={"file": f})
 
-### `GET /download/{slug}`
+data = response.json()
+if data["success"]:
+    print("Direct File URL:", data["url"])
+else:
+    print("Upload Failed:", data["error"])
+```
 
-Force-download the image with its original filename.
+#### 2. JavaScript / Node.js (`fetch`)
+```javascript
+const formData = new FormData();
+formData.append("file", fileInput.files[0]);
 
----
+const response = await fetch("https://media-hosting.dhyeyp254.workers.dev/api/upload", {
+  method: "POST",
+  headers: {
+    "X-API-Key": "YOUR_DEVELOPER_TOKEN"
+  },
+  body: formData
+});
 
-### `GET /i/{slug}`
+const data = await response.json();
+console.log("Direct File URL:", data.url);
+```
 
-HTML page with image preview, metadata, share links, and copy buttons.
+#### 3. cURL
+```bash
+curl -X POST https://media-hosting.dhyeyp254.workers.dev/api/upload \
+  -H "X-API-Key: YOUR_DEVELOPER_TOKEN" \
+  -F "file=@/path/to/any_file.pdf"
+```
 
----
+#### 4. PHP
+```php
+<?php
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, "https://media-hosting.dhyeyp254.workers.dev/api/upload");
+curl_setopt($ch, CURLOPT_HTTPHEADER, ["X-API-Key: YOUR_DEVELOPER_TOKEN"]);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, [
+    "file" => new CURLFile("/path/to/document.pdf")
+]);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
-### `GET /health`
+$data = json_decode(curl_exec($ch), true);
+curl_close($ch);
 
-```json
-{"status": "ok"}
+echo "Direct File URL: " . $data["url"];
+?>
 ```
 
 ---
 
-## 🔒 Security Considerations
+## 🚀 Deployment Guide
 
-- **Bot token** is never exposed in responses or logs
-- **File type** is validated using magic bytes, not the Content-Type header
-- **Filename** is sanitized (path traversal stripped)
-- **Upload size** is enforced server-side
-- **Security headers** are set on all responses (`X-Content-Type-Options`, `X-Frame-Options`, etc.)
-- **Rate limiting** prevents abuse via SlowAPI
-- **CORS** is open for image serving (required for cross-origin embeds)
+### Cloudflare Deployment (Core Media Host & API)
 
----
-
-## 📊 MongoDB Schema
-
-**Collection:** `images`
-
-```json
-{
-  "_id": "silent-bucket",
-  "file_id": "AgACAgIAAxkBAAIB...",
-  "file_unique_id": "AQADx8...",
-  "message_id": 42,
-  "filename": "photo.jpg",
-  "mime_type": "image/jpeg",
-  "size": 1048576,
-  "views": 17,
-  "created_at": "2025-01-01T12:00:00Z"
-}
-```
-
-**Indexes:**
-- `_id` (unique) — slug
-- `created_at` (descending) — for future gallery pages
-- `file_unique_id` (ascending) — for deduplication
+1. **Create D1 Database** in Cloudflare Dashboard:
+   - Name: `ar_hosting_db`
+   - Console command:
+     ```sql
+     CREATE TABLE IF NOT EXISTS media (
+       url TEXT PRIMARY KEY,
+       fileId TEXT NOT NULL,
+       filename TEXT,
+       file_size INTEGER DEFAULT 0,
+       mime_type TEXT DEFAULT '',
+       created_at INTEGER DEFAULT 0,
+       delete_token TEXT DEFAULT ''
+     );
+     ```
+2. **Deploy to Cloudflare Pages**:
+   - Connect your GitHub repository.
+   - Build command: *(leave blank)*
+   - Build output directory: `/`
+3. **Environment Variables**:
+   - `DOMAIN`: Your worker/pages domain (e.g. `media-hosting.dhyeyp254.workers.dev`).
+   - `TG_BOT_TOKEN`: Telegram bot token from `@BotFather`.
+   - `TG_CHAT_ID`: Telegram channel ID for backup storage.
+   - `DATABASE`: D1 Database binding named `DATABASE`.
+   - `USERNAME`: Admin username for `/admin`.
+   - `PASSWORD`: Admin password for `/admin`.
+   - `API_KEY` *(optional)*: Key to restrict developer uploads (if left blank, API is open).
 
 ---
 
-## 🤝 Contributing
+### Vercel Deployment (Telegram Bot Webhook)
 
-Pull requests welcome! Please open an issue first for major changes.
+1. Connect repository to Vercel.
+2. In Vercel Project Settings, set Environment Variables:
+   - `TG_BOT_TOKEN`: Bot token from `@BotFather`.
+   - `TG_CHAT_ID`: Telegram channel ID.
+   - `CF_DOMAIN`: Your Cloudflare Worker domain (e.g. `media-hosting.dhyeyp254.workers.dev`).
+   - `CF_USERNAME`: `admin` (or your worker username).
+   - `CF_PASSWORD`: Your worker password.
+3. Set your Telegram bot webhook to:
+   `https://<your-vercel-app>.vercel.app/webhook`
+4. Send any file or media to your Telegram bot; it will upload it to your Cloudflare hosting engine and reply with the direct link!
 
 ---
 
 ## 📄 License
 
-MIT © 2025 Dhyey Space
+MIT License.

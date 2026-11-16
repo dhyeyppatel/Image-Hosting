@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CommonThread - Universal Media Hosting & Developer API</title>
+  <meta name="description" content="Host any media: images, videos, audio, PDF, documents, scripts (.bat, .sh), and text. Simple Developer API available.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #09090b; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="text-zinc-100 min-h-screen flex flex-col antialiased selection:bg-orange-500/20 selection:text-orange-300">
+  <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-black font-bold text-lg shadow-lg shadow-orange-500/20">
+          <span class="iconify" data-icon="lucide:layers"></span>
+        </div>
+        <span class="font-bold text-lg tracking-tight">CommonThread</span>
+      </a>
+      <div class="flex items-center gap-3">
+        <a href="/docs" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1.5 shadow-lg shadow-orange-500/10">
+          <span class="iconify" data-icon="lucide:terminal"></span>
+          <span>Developer API Docs</span>
+        </a>
+        <a href="/admin" class="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition">
+          Admin
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-3xl w-full mx-auto px-4 py-12 flex flex-col gap-8 justify-center">
+    <div class="text-center space-y-3">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-semibold uppercase tracking-wider">
+        <span>Universal Media Host & Developer API</span>
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+        Host Any Media & Files
+      </h1>
+      <p class="text-zinc-400 text-sm max-w-lg mx-auto">
+        Upload images, PDFs, videos, audio, text, or scripts (<code class="text-orange-400">.bat</code>, <code class="text-orange-400">.sh</code>, <code class="text-orange-400">.txt</code>) and get instant direct links.
+      </p>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+      <div id="dropzone" class="border-2 border-dashed border-zinc-700 rounded-2xl p-8 sm:p-12 text-center cursor-pointer hover:border-orange-500 transition-all flex flex-col items-center justify-center gap-3">
+        <input type="file" id="file-input" class="hidden" />
+        <div class="w-14 h-14 rounded-2xl bg-orange-500/10 text-orange-400 flex items-center justify-center text-3xl">
+          <span class="iconify" data-icon="lucide:upload-cloud"></span>
+        </div>
+        <div>
+          <p class="text-base font-semibold text-white">Click to browse or drag & drop any file</p>
+          <p class="text-xs text-zinc-400 mt-1">Supports any media up to 20MB</p>
+        </div>
+        <button type="button" onclick="document.getElementById('file-input').click()" class="mt-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition">
+          Select File
+        </button>
+      </div>
+
+      <!-- Optional Developer API Key for testing -->
+      <div class="flex items-center gap-2 px-1">
+        <span class="iconify text-zinc-500 text-sm" data-icon="lucide:key"></span>
+        <input type="text" id="api-key-input" placeholder="Developer API Token (optional - leave blank if not configured)" class="bg-zinc-950/60 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs mono text-zinc-300 w-full focus:outline-none focus:border-orange-500/50" />
+      </div>
+
+      <!-- Upload Progress -->
+      <div id="progress-box" class="hidden space-y-2">
+        <div class="flex justify-between text-xs text-zinc-400 font-medium">
+          <span id="progress-status">Uploading file...</span>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div class="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
+          <div id="progress-bar" class="bg-orange-500 h-full w-0 transition-all duration-300"></div>
+        </div>
+      </div>
+
+      <!-- Upload Result -->
+      <div id="result-box" class="hidden space-y-3 p-4 bg-zinc-950 border border-zinc-800 rounded-2xl">
+        <div class="flex items-center justify-between text-xs text-zinc-400">
+          <span class="font-bold text-white flex items-center gap-1.5">
+            <span class="iconify text-green-400 text-base" data-icon="lucide:check-circle"></span>
+            <span id="res-filename">File</span>
+          </span>
+          <span id="res-size">0 KB</span>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" id="res-url" readonly class="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs mono text-zinc-200 focus:outline-none" />
+          <button onclick="copyDirectUrl()" class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition flex items-center gap-1">
+            <span class="iconify" data-icon="lucide:copy"></span>
+            <span id="copy-btn-label">Copy</span>
+          </button>
+          <a id="res-open-link" href="#" target="_blank" class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition flex items-center gap-1">
+            <span class="iconify" data-icon="lucide:external-link"></span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Developer API Banner -->
+    <div class="bg-gradient-to-r from-zinc-900 via-zinc-950 to-zinc-900 border border-zinc-800 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="space-y-1 text-center sm:text-left">
+        <h3 class="text-sm font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+          <span class="iconify text-orange-400" data-icon="lucide:terminal"></span>
+          <span>Upload directly from your app or project</span>
+        </h3>
+        <p class="text-xs text-zinc-400">Use our simple REST API <code class="text-zinc-300 mono bg-zinc-800 px-1.5 py-0.5 rounded">POST /api/upload</code> in Python, JS, cURL, etc.</p>
+      </div>
+      <a href="/docs" class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-semibold text-xs transition shrink-0">
+        Read API Docs &rarr;
+      </a>
+    </div>
+  </main>
+
+  <div id="toast" class="fixed bottom-6 right-6 px-4 py-2.5 rounded-xl bg-zinc-800 text-white text-xs font-medium border border-zinc-700 shadow-2xl opacity-0 pointer-events-none transition-all duration-300 z-50">
+    Copied link!
+  </div>
+
+  <script>
+    const API_BASE = window.location.hostname.includes('vercel.app') 
+      ? 'https://media-hosting.dhyeyp254.workers.dev' 
+      : '';
+
+    const fileInput = document.getElementById('file-input');
+    const dropzone = document.getElementById('dropzone');
+
+    ['dragenter', 'dragover'].forEach(e => dropzone.addEventListener(e, (ev) => { ev.preventDefault(); dropzone.classList.add('border-orange-500'); }));
+    ['dragleave', 'drop'].forEach(e => dropzone.addEventListener(e, (ev) => { ev.preventDefault(); dropzone.classList.remove('border-orange-500'); }));
+    dropzone.addEventListener('drop', (ev) => {
+      if (ev.dataTransfer.files && ev.dataTransfer.files.length) uploadFile(ev.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (ev) => {
+      if (ev.target.files && ev.target.files.length) uploadFile(ev.target.files[0]);
+    });
+    window.addEventListener('paste', (ev) => {
+      if (ev.clipboardData && ev.clipboardData.files.length) uploadFile(ev.clipboardData.files[0]);
+    });
+
+    async function uploadFile(file) {
+      if (file.size > 20 * 1024 * 1024) return showToast('File exceeds 20MB limit');
+
+      const progressBox = document.getElementById('progress-box');
+      const progressBar = document.getElementById('progress-bar');
+      const progressPercent = document.getElementById('progress-percent');
+      const resultBox = document.getElementById('result-box');
+
+      progressBox.classList.remove('hidden');
+      resultBox.classList.add('hidden');
+      progressBar.style.width = '45%';
+      progressPercent.textContent = '45%';
+
+      const fd = new FormData();
+      fd.append('file', file);
+
+      const apiKey = document.getElementById('api-key-input').value.trim();
+      const headers = {};
+      if (apiKey) {
+        headers['X-API-Key'] = apiKey;
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/api/upload', { method: 'POST', body: fd, headers });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+
+        progressBar.style.width = '100%';
+        progressPercent.textContent = '100%';
+
+        setTimeout(() => {
+          progressBox.classList.add('hidden');
+          resultBox.classList.remove('hidden');
+          document.getElementById('res-filename').textContent = data.filename;
+          document.getElementById('res-size').textContent = data.size_formatted || (Math.round(data.size / 1024) + ' KB');
+          document.getElementById('res-url').value = data.url;
+          document.getElementById('res-open-link').href = data.url;
+          showToast('Upload successful!');
+        }, 400);
+      } catch (err) {
+        progressBox.classList.add('hidden');
+        showToast('Upload failed: ' + err.message);
+      }
+    }
+
+    function copyDirectUrl() {
+      const input = document.getElementById('res-url');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      showToast('Copied direct URL!');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
+    }
+  </script>
+</body>
+</html>

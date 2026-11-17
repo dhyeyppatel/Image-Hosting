@@ -5,7 +5,7 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, X-Shelfie-Token, X-Shelfie-Origin',
           'Access-Control-Max-Age': '86400',
         }
       });
@@ -88,13 +88,13 @@ export default {
     // Route: Form Upload (POST /upload)
     if (pathname === '/upload') {
       return request.method === 'POST'
-        ? await handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize)
+        ? await handleUploadRequest(request, env, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize)
         : new Response('Method Not Allowed', { status: 405 });
     }
 
     // Route: Remote URL Ingestion (SSRF Hardened)
     if (pathname === '/hosturl') {
-      return await handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize);
+      return await handleUrlUploadRequest(request, env, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize);
     }
 
     // Route: Developer API Documentation
@@ -1080,11 +1080,54 @@ async function handleApiRegisterRequest(request, env, domain, USERNAME, PASSWORD
   }
 }
 
+// Helper: Enforce Shelfie Platform Upload Authorization
+async function isAuthorizedUploadRequest(request, env, enableAuth, USERNAME, PASSWORD) {
+  // 1. Origin / Referer check: shelfie platform domains
+  const origin = (request.headers.get('Origin') || '').toLowerCase();
+  const referer = (request.headers.get('Referer') || '').toLowerCase();
+  const source = origin || referer;
+
+  const isShelfiePlatform = source.includes('shelfie.dhyey.cc') ||
+                            source.includes('shelfie') ||
+                            source.includes('vercel.app') ||
+                            source.includes('localhost') ||
+                            source.includes('127.0.0.1');
+
+  // 2. Check X-Shelfie-Token or X-API-Key
+  const apiKey = request.headers.get('X-Shelfie-Token') || request.headers.get('X-API-Key');
+  if (apiKey) {
+    const authCheck = await validateApiKey(request, env, apiKey);
+    if (authCheck && authCheck.valid) {
+      return { authorized: true, name: authCheck.name, isPremium: authCheck.is_premium === 1 };
+    }
+  }
+
+  // 3. Platform header verification with Shelfie origin
+  const shelfieHeader = request.headers.get('X-Shelfie-Origin');
+  if (isShelfiePlatform && shelfieHeader === 'shelfie-platform') {
+    return { authorized: true, name: 'Shelfie Platform', isPremium: true };
+  }
+
+  // 4. Basic Auth (if enableAuth is active)
+  if (enableAuth && authenticate(request, USERNAME, PASSWORD)) {
+    return { authorized: true, name: USERNAME, isPremium: true };
+  }
+
+  return { authorized: false };
+}
+
 // Form Upload Request (POST /upload)
-async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
+async function handleUploadRequest(request, env, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
   try {
-    if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+    const authStatus = await isAuthorizedUploadRequest(request, env, enableAuth, USERNAME, PASSWORD);
+    if (!authStatus.authorized) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Unauthorized: Direct uploads must originate from an authenticated Shelfie platform session.'
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
     }
 
     const formData = await request.formData();
@@ -1112,19 +1155,48 @@ async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASS
       filename: originalFileName,
       size: file.size,
       mimeType: mimeType,
-      source: 'Web Uploader (Browser GUI)',
-      authName: enableAuth ? USERNAME : 'Public Web',
-      tier: '⚡ Web Tier',
+      source: 'Shelfie Platform Uploader',
+      authName: authStatus.name || 'Shelfie Web',
+      tier: file.size > 20 * 1024 * 1024 ? '👑 Cloudflare R2' : '⚡ Telegram Cloud',
       url: imageURL,
       slug: slug,
       deleteToken: deleteToken,
       timestamp: timestamp
     };
 
-    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, originalFileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID, metadata);
-    const finalResolvedName = resolvedName || originalFileName;
+    let fileId;
+    let finalResolvedName = originalFileName;
+    let storageType = 'telegram';
 
-    await insertMediaRecord(DATABASE, imageURL, fileId, finalResolvedName, file.size, mimeType, timestamp, deleteToken);
+    // Hybrid Storage Architecture:
+    // Files <= 20MB are ALWAYS stored on Telegram Cloud Storage (Free & unlimited)
+    // Files > 20MB are stored directly in Cloudflare R2 object storage
+    if (file.size > 20 * 1024 * 1024) {
+      if (!env.R2_BUCKET) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Cloudflare R2 storage backend is currently not bound for files larger than 20MB.'
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const r2Key = `r2_${slug}.${ext}`;
+      await env.R2_BUCKET.put(r2Key, fileBuffer, {
+        httpMetadata: { contentType: mimeType }
+      });
+      fileId = r2Key;
+      storageType = 'r2';
+    } else {
+      // <= 20MB: Telegram Cloud Storage (100% Free)
+      const tgRes = await uploadToTelegram(fileBuffer, originalFileName, mimeType, TG_BOT_TOKEN, TG_CHAT_ID, metadata);
+      fileId = tgRes.fileId;
+      finalResolvedName = tgRes.resolvedName || originalFileName;
+      storageType = 'telegram';
+    }
+
+    await insertMediaRecord(DATABASE, imageURL, fileId, finalResolvedName, file.size, mimeType, timestamp, deleteToken, storageType);
 
     const json = {
       success: true,
@@ -1134,26 +1206,34 @@ async function handleUploadRequest(request, DATABASE, enableAuth, USERNAME, PASS
       size: file.size,
       size_formatted: formatBytes(file.size),
       uploaded_on: new Date(timestamp).toISOString(),
-      media_type: mimeType
+      media_type: mimeType,
+      storage_type: storageType
     };
     return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('Upload Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 
 // Hardened Remote URL Ingestion (GET /hosturl?url=...)
-async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
+async function handleUrlUploadRequest(request, env, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
   try {
-    if (enableAuth && !authenticate(request, USERNAME, PASSWORD)) {
-      return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+    const authStatus = await isAuthorizedUploadRequest(request, env, enableAuth, USERNAME, PASSWORD);
+    if (!authStatus.authorized) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Unauthorized: Remote URL uploads must originate from an authorized Shelfie platform session.'
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
     }
 
     const url = new URL(request.url);
     const fileUrl = url.searchParams.get('url');
     if (!fileUrl) {
-      return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
+      return new Response(JSON.stringify({ success: false, error: 'Missing url parameter' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -1161,7 +1241,7 @@ async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, P
 
     const safeCheck = isSafeUrl(fileUrl);
     if (!safeCheck.safe) {
-      return new Response(JSON.stringify({ error: safeCheck.reason }), {
+      return new Response(JSON.stringify({ success: false, error: safeCheck.reason }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -1169,7 +1249,7 @@ async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, P
 
     const fileResponse = await fetch(fileUrl);
     if (!fileResponse.ok) {
-      return new Response(JSON.stringify({ error: 'Failed to download file from URL' }), {
+      return new Response(JSON.stringify({ success: false, error: 'Failed to download file from URL' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -1205,18 +1285,43 @@ async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, P
       size: fileBuffer.byteLength,
       mimeType: contentType,
       source: 'Remote URL Mirror (/hosturl)',
-      authName: enableAuth ? USERNAME : 'Public URL',
-      tier: '⚡ Standard',
+      authName: authStatus.name || 'Shelfie Platform',
+      tier: fileBuffer.byteLength > 20 * 1024 * 1024 ? '👑 Cloudflare R2' : '⚡ Telegram Cloud',
       url: imageURL,
       slug: slug,
       deleteToken: deleteToken,
       timestamp: timestamp
     };
 
-    const { fileId, resolvedName } = await uploadToTelegram(fileBuffer, fileName, contentType, TG_BOT_TOKEN, TG_CHAT_ID, metadata);
-    const finalResolvedName = resolvedName || fileName;
+    let fileId;
+    let finalResolvedName = fileName;
+    let storageType = 'telegram';
 
-    await insertMediaRecord(DATABASE, imageURL, fileId, finalResolvedName, fileBuffer.byteLength, contentType, timestamp, deleteToken);
+    if (fileBuffer.byteLength > 20 * 1024 * 1024) {
+      if (!env.R2_BUCKET) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Cloudflare R2 storage backend is currently not bound for files larger than 20MB.'
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const r2Key = `r2_${slug}.${ext}`;
+      await env.R2_BUCKET.put(r2Key, fileBuffer, {
+        httpMetadata: { contentType: contentType }
+      });
+      fileId = r2Key;
+      storageType = 'r2';
+    } else {
+      const tgRes = await uploadToTelegram(fileBuffer, fileName, contentType, TG_BOT_TOKEN, TG_CHAT_ID, metadata);
+      fileId = tgRes.fileId;
+      finalResolvedName = tgRes.resolvedName || fileName;
+      storageType = 'telegram';
+    }
+
+    await insertMediaRecord(DATABASE, imageURL, fileId, finalResolvedName, fileBuffer.byteLength, contentType, timestamp, deleteToken, storageType);
 
     const json = {
       success: true,
@@ -1226,12 +1331,13 @@ async function handleUrlUploadRequest(request, DATABASE, enableAuth, USERNAME, P
       size: fileBuffer.byteLength,
       size_formatted: formatBytes(fileBuffer.byteLength),
       uploaded_on: new Date(timestamp).toISOString(),
-      media_type: contentType
+      media_type: contentType,
+      storage_type: storageType
     };
     return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('URL Upload Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 

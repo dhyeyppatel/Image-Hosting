@@ -1,11 +1,12 @@
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
+      const reqHeaders = request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization, X-API-Key';
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, X-Shelfie-Token, X-Shelfie-Origin',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE, PATCH',
+          'Access-Control-Allow-Headers': reqHeaders,
           'Access-Control-Max-Age': '86400',
         }
       });
@@ -427,39 +428,39 @@ function buildTelegramCaption(metadata) {
   const lines = [];
 
   const name = metadata.filename || metadata.name || 'file.bin';
-  lines.push(`📁 <b>File:</b> ${escapeHtml(name)}`);
+  lines.push(`<b>File:</b> ${escapeHtml(name)}`);
 
   if (metadata.size) {
     const formatted = formatBytes(metadata.size);
-    lines.push(`📊 <b>Size:</b> ${formatted} (${metadata.size.toLocaleString()} bytes)`);
+    lines.push(`<b>Size:</b> ${formatted} (${metadata.size.toLocaleString()} bytes)`);
   }
 
   if (metadata.mimeType) {
-    lines.push(`🏷️ <b>Type:</b> <code>${escapeHtml(metadata.mimeType)}</code>`);
+    lines.push(`<b>Type:</b> <code>${escapeHtml(metadata.mimeType)}</code>`);
   }
 
   if (metadata.source) {
-    lines.push(`🌐 <b>Source:</b> ${escapeHtml(metadata.source)}`);
+    lines.push(`<b>Source:</b> ${escapeHtml(metadata.source)}`);
   }
 
   if (metadata.authName) {
     const tier = metadata.tier ? ` [${metadata.tier}]` : '';
-    lines.push(`🔑 <b>Auth:</b> ${escapeHtml(metadata.authName)}${tier}`);
+    lines.push(`<b>Auth:</b> ${escapeHtml(metadata.authName)}${tier}`);
   }
 
   const dateObj = metadata.timestamp ? new Date(metadata.timestamp) : new Date();
   const utcStr = dateObj.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
   const istStr = dateObj.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-  lines.push(`⏱️ <b>Uploaded:</b> ${utcStr} (${istStr} IST)`);
+  lines.push(`<b>Uploaded:</b> ${utcStr} (${istStr} IST)`);
 
   if (metadata.url) {
-    lines.push(`🔗 <b>Direct Link:</b> ${metadata.url}`);
+    lines.push(`<b>Direct Link:</b> ${metadata.url}`);
   }
   if (metadata.slug) {
-    lines.push(`🆔 <b>ID / Slug:</b> <code>${metadata.slug}</code>`);
+    lines.push(`<b>ID / Slug:</b> <code>${metadata.slug}</code>`);
   }
   if (metadata.deleteToken) {
-    lines.push(`🗑️ <b>Delete Token:</b> <code>${metadata.deleteToken}</code>`);
+    lines.push(`<b>Delete Token:</b> <code>${metadata.deleteToken}</code>`);
   }
 
   let caption = lines.join('\n');
@@ -688,7 +689,7 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
       mimeType: mimeType,
       source: 'Developer API (POST /api/upload)',
       authName: activeAuthCheck ? activeAuthCheck.name : 'Developer Token',
-      tier: isPremium ? '👑 Premium Tier (500MB)' : '⚡ Free Tier (20MB)',
+      tier: isPremium ? 'Premium Tier (500MB)' : 'Free Tier (20MB)',
       url: imageURL,
       slug: slug,
       deleteToken: deleteToken,
@@ -744,21 +745,29 @@ async function handleDeveloperApiUpload(request, env, domain, TG_BOT_TOKEN, TG_C
     return new Response(JSON.stringify({
       success: true,
       url: imageURL,
+      data: imageURL,
       filename: resolvedName,
       size: fileBuffer.byteLength,
       size_formatted: formatBytes(fileBuffer.byteLength),
       mime_type: mimeType,
       storage: storageType,
       tier: isPremium ? 'premium' : 'free',
+      delete_token: deleteToken,
       uploaded_at: new Date(timestamp).toISOString()
     }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     });
   } catch (error) {
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     });
   }
 }
@@ -846,7 +855,7 @@ async function handleImgBBApiUpload(request, env, domain, TG_BOT_TOKEN, TG_CHAT_
       mimeType: mimeType,
       source: 'ImgBB v1 API (/api/1/upload)',
       authName: authCheck ? authCheck.name : 'ImgBB Key',
-      tier: '⚡ Standard',
+      tier: 'Standard',
       url: imageURL,
       slug: slug,
       deleteToken: deleteToken,
@@ -1080,54 +1089,26 @@ async function handleApiRegisterRequest(request, env, domain, USERNAME, PASSWORD
   }
 }
 
-// Helper: Enforce Shelfie Platform Upload Authorization
-async function isAuthorizedUploadRequest(request, env, enableAuth, USERNAME, PASSWORD) {
-  // 1. Origin / Referer check: shelfie platform domains
-  const origin = (request.headers.get('Origin') || '').toLowerCase();
-  const referer = (request.headers.get('Referer') || '').toLowerCase();
-  const source = origin || referer;
-
-  const isShelfiePlatform = source.includes('shelfie.dhyey.cc') ||
-                            source.includes('shelfie') ||
-                            source.includes('vercel.app') ||
-                            source.includes('localhost') ||
-                            source.includes('127.0.0.1');
-
-  // 2. Check X-Shelfie-Token or X-API-Key
-  const apiKey = request.headers.get('X-Shelfie-Token') || request.headers.get('X-API-Key');
-  if (apiKey) {
-    const authCheck = await validateApiKey(request, env, apiKey);
-    if (authCheck && authCheck.valid) {
-      return { authorized: true, name: authCheck.name, isPremium: authCheck.is_premium === 1 };
-    }
-  }
-
-  // 3. Platform header verification with Shelfie origin
-  const shelfieHeader = request.headers.get('X-Shelfie-Origin');
-  if (isShelfiePlatform && shelfieHeader === 'shelfie-platform') {
-    return { authorized: true, name: 'Shelfie Platform', isPremium: true };
-  }
-
-  // 4. Basic Auth (if enableAuth is active)
-  if (enableAuth && authenticate(request, USERNAME, PASSWORD)) {
-    return { authorized: true, name: USERNAME, isPremium: true };
-  }
-
-  return { authorized: false };
-}
-
 // Form Upload Request (POST /upload)
 async function handleUploadRequest(request, env, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
   try {
-    const authStatus = await isAuthorizedUploadRequest(request, env, enableAuth, USERNAME, PASSWORD);
-    if (!authStatus.authorized) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Unauthorized: Direct uploads must originate from an authenticated Shelfie platform session.'
-      }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+    let authName = 'Public Web';
+    if (enableAuth) {
+      const apiKey = request.headers.get('X-API-Key') || request.headers.get('Authorization');
+      let isKeyValid = false;
+      if (apiKey) {
+        const authCheck = await validateApiKey(request, env, apiKey);
+        if (authCheck && authCheck.valid) {
+          isKeyValid = true;
+          authName = authCheck.name || 'Developer Token';
+        }
+      }
+      if (!isKeyValid && !authenticate(request, USERNAME, PASSWORD)) {
+        return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+      }
+      if (!isKeyValid) {
+        authName = USERNAME;
+      }
     }
 
     const formData = await request.formData();
@@ -1137,7 +1118,7 @@ async function handleUploadRequest(request, env, DATABASE, enableAuth, USERNAME,
     if (file.size > maxSize) {
       return new Response(JSON.stringify({ error: `File size exceeds ${maxSize / (1024 * 1024)}MB Limit` }), {
         status: 413,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     }
 
@@ -1155,9 +1136,9 @@ async function handleUploadRequest(request, env, DATABASE, enableAuth, USERNAME,
       filename: originalFileName,
       size: file.size,
       mimeType: mimeType,
-      source: 'Shelfie Platform Uploader',
-      authName: authStatus.name || 'Shelfie Web',
-      tier: file.size > 20 * 1024 * 1024 ? '👑 Cloudflare R2' : '⚡ Telegram Cloud',
+      source: 'Web Uploader (Browser GUI)',
+      authName: authName,
+      tier: file.size > 20 * 1024 * 1024 ? 'Cloudflare R2' : 'Telegram Cloud',
       url: imageURL,
       slug: slug,
       deleteToken: deleteToken,
@@ -1178,7 +1159,7 @@ async function handleUploadRequest(request, env, DATABASE, enableAuth, USERNAME,
           error: 'Cloudflare R2 storage backend is currently not bound for files larger than 20MB.'
         }), {
           status: 503,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
       }
 
@@ -1207,30 +1188,39 @@ async function handleUploadRequest(request, env, DATABASE, enableAuth, USERNAME,
       size_formatted: formatBytes(file.size),
       uploaded_on: new Date(timestamp).toISOString(),
       media_type: mimeType,
-      storage_type: storageType
+      storage_type: storageType,
+      delete_token: deleteToken
     };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
   } catch (error) {
     console.error('Upload Error:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
   }
 }
 
 // Hardened Remote URL Ingestion (GET /hosturl?url=...)
 async function handleUrlUploadRequest(request, env, DATABASE, enableAuth, USERNAME, PASSWORD, domain, TG_BOT_TOKEN, TG_CHAT_ID, maxSize) {
   try {
-    const authStatus = await isAuthorizedUploadRequest(request, env, enableAuth, USERNAME, PASSWORD);
-    if (!authStatus.authorized) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Unauthorized: Remote URL uploads must originate from an authorized Shelfie platform session.'
-      }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+    const url = new URL(request.url);
+    let authName = 'Public URL';
+    if (enableAuth) {
+      const apiKey = request.headers.get('X-API-Key') || url.searchParams.get('api_key') || url.searchParams.get('key') || request.headers.get('Authorization');
+      let isKeyValid = false;
+      if (apiKey) {
+        const authCheck = await validateApiKey(request, env, apiKey);
+        if (authCheck && authCheck.valid) {
+          isKeyValid = true;
+          authName = authCheck.name || 'Developer Token';
+        }
+      }
+      if (!isKeyValid && !authenticate(request, USERNAME, PASSWORD)) {
+        return new Response('Unauthorized', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="Admin"' } });
+      }
+      if (!isKeyValid) {
+        authName = USERNAME;
+      }
     }
 
-    const url = new URL(request.url);
     const fileUrl = url.searchParams.get('url');
     if (!fileUrl) {
       return new Response(JSON.stringify({ success: false, error: 'Missing url parameter' }), {
@@ -1285,8 +1275,8 @@ async function handleUrlUploadRequest(request, env, DATABASE, enableAuth, USERNA
       size: fileBuffer.byteLength,
       mimeType: contentType,
       source: 'Remote URL Mirror (/hosturl)',
-      authName: authStatus.name || 'Shelfie Platform',
-      tier: fileBuffer.byteLength > 20 * 1024 * 1024 ? '👑 Cloudflare R2' : '⚡ Telegram Cloud',
+      authName: authName,
+      tier: fileBuffer.byteLength > 20 * 1024 * 1024 ? 'Cloudflare R2' : 'Telegram Cloud',
       url: imageURL,
       slug: slug,
       deleteToken: deleteToken,
@@ -1304,7 +1294,7 @@ async function handleUrlUploadRequest(request, env, DATABASE, enableAuth, USERNA
           error: 'Cloudflare R2 storage backend is currently not bound for files larger than 20MB.'
         }), {
           status: 503,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
       }
 
@@ -1332,12 +1322,13 @@ async function handleUrlUploadRequest(request, env, DATABASE, enableAuth, USERNA
       size_formatted: formatBytes(fileBuffer.byteLength),
       uploaded_on: new Date(timestamp).toISOString(),
       media_type: contentType,
-      storage_type: storageType
+      storage_type: storageType,
+      delete_token: deleteToken
     };
-    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
   } catch (error) {
     console.error('URL Upload Error:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
   }
 }
 
@@ -1740,7 +1731,7 @@ function handleEmailRedirect(request) {
 </head>
 <body>
   <div class="card">
-    <div style="font-size: 40px; margin-bottom: 12px;">✉️</div>
+    <div style="margin-bottom: 12px;"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></div>
     <h1>Redirecting to Email</h1>
     <p>Opening your email composer to request your Developer API key from <strong>${email}</strong>...</p>
     <a href="${mailtoUrl}" class="btn btn-primary">Open Default Email App</a>
@@ -1819,7 +1810,8 @@ function serveDocumentationPage(domain) {
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10">
         <div class="space-y-1.5">
           <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[11px] font-bold uppercase tracking-wider">
-            <span>👑 Premium API Tier</span>
+            <span class="iconify" data-icon="lucide:shield-check"></span>
+            <span>Premium API Tier</span>
           </div>
           <h2 class="text-lg sm:text-xl font-bold text-white tracking-tight">Need to upload files larger than 20MB?</h2>
           <p class="text-xs sm:text-sm text-zinc-300 max-w-xl">
@@ -2207,7 +2199,7 @@ function servePricingPage(domain) {
       <!-- Developer Pro / Premium (Highlighted) -->
       <div class="bg-gradient-to-b from-orange-950/40 via-zinc-900/90 to-zinc-900 border-2 border-orange-500/50 rounded-3xl p-7 flex flex-col justify-between shadow-2xl shadow-orange-500/10 relative scale-105 space-y-6">
         <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-400 text-black font-extrabold text-[11px] uppercase tracking-wider shadow-md">
-          👑 Most Popular
+          Most Popular
         </div>
         <div class="space-y-4">
           <div class="flex justify-between items-center">
@@ -2252,8 +2244,9 @@ function servePricingPage(domain) {
             </li>
           </ul>
         </div>
-        <a href="/request-api" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-black font-bold text-xs text-center transition block shadow-lg shadow-orange-500/20">
-          ✉️ Request Premium API Token &rarr;
+        <a href="/request-api" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-black font-bold text-xs text-center transition flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/20">
+          <span class="iconify" data-icon="lucide:mail"></span>
+          <span>Request Premium API Token &rarr;</span>
         </a>
       </div>
 
@@ -2656,7 +2649,7 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
     const supportedVideoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm'];
     const isSupported = [...supportedImageExtensions, ...supportedVideoExtensions].includes(fileExtension);
     const backgroundStyle = isSupported ? '' : `style="font-size: 50px; display: flex; justify-content: center; align-items: center;"`;
-    const icon = isSupported ? '' : '📁';
+    const icon = isSupported ? '' : '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#71717a" stroke-width="1.5"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
     return `
     <div class="media-container" data-key="${url}" onclick="toggleImageSelection(this)" ${backgroundStyle}>
       <div class="media-type">${mediaType}</div>
@@ -3256,7 +3249,7 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
       } else if (isSupported) {
         mediaContent = '<img class="gallery-image lazy" data-src="' + url + '" alt="Image">';
       } else {
-        mediaContent = '📁';
+        mediaContent = '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#71717a" stroke-width="1.5"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
       }
       
       container.innerHTML = '<div class="media-type">' + mediaType + '</div>' + mediaContent + '<div class="upload-time">Upload time: ' + new Date(parseInt(timestamp)).toLocaleString('en-US', { timeZone: 'Asia/kolkata' }) + '</div>';
@@ -3359,8 +3352,8 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
           const dateStr = new Date(k.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           const isPrem = k.is_premium === 1;
           const tierBtn = isPrem
-            ? '<button class="badge-tier badge-premium" onclick="toggleKeyTier(\\'' + escapeHtml(k.key) + '\\', 0)" title="Click to switch to Free (20MB)">👑 Premium (500MB) <span style="font-size:10px; opacity:0.8;">⇄ Free</span></button>'
-            : '<button class="badge-tier badge-free" onclick="toggleKeyTier(\\'' + escapeHtml(k.key) + '\\', 1)" title="Click to switch to Premium (500MB)">⚡ Free (20MB) <span style="font-size:10px; opacity:0.8;">⇄ Upgrade</span></button>';
+            ? '<button class="badge-tier badge-premium" onclick="toggleKeyTier(\\'' + escapeHtml(k.key) + '\\', 0)" title="Click to switch to Free (20MB)">Premium (500MB) <span style="font-size:10px; opacity:0.8;">&harr; Free</span></button>'
+            : '<button class="badge-tier badge-free" onclick="toggleKeyTier(\\'' + escapeHtml(k.key) + '\\', 1)" title="Click to switch to Premium (500MB)">Free (20MB) <span style="font-size:10px; opacity:0.8;">&harr; Upgrade</span></button>';
           return '<tr>' +
             '<td><strong>' + escapeHtml(k.name) + '</strong></td>' +
             '<td><code class="token-code">' + escapeHtml(k.key) + '</code><button class="btn-copy-token" onclick="copyText(\\'' + escapeHtml(k.key) + '\\')">Copy</button></td>' +
@@ -3456,12 +3449,12 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
     <div class="header">
       <div class="header-left">
         <div class="nav-tabs">
-          <button id="tab-gallery-btn" class="nav-tab active" onclick="switchAdminTab('gallery')">📁 Media Gallery (<span id="total-count">${totalCount}</span>)</button>
-          <button id="tab-tokens-btn" class="nav-tab" onclick="switchAdminTab('tokens')">🔑 Developer API Tokens</button>
-          <a href="/pricing" target="_blank" class="nav-link">💳 Pricing & Plans &rarr;</a>
-          <a href="/docs" target="_blank" class="nav-link">📖 API Docs &rarr;</a>
-          <a href="/request-api" target="_blank" class="nav-link">✉️ Request Key &rarr;</a>
-          <a href="/" target="_blank" class="nav-link">🌐 Web Uploader &rarr;</a>
+          <button id="tab-gallery-btn" class="nav-tab active" onclick="switchAdminTab('gallery')">Media Gallery (<span id="total-count">${totalCount}</span>)</button>
+          <button id="tab-tokens-btn" class="nav-tab" onclick="switchAdminTab('tokens')">Developer API Tokens</button>
+          <a href="/pricing" target="_blank" class="nav-link">Pricing & Plans &rarr;</a>
+          <a href="/docs" target="_blank" class="nav-link">API Docs &rarr;</a>
+          <a href="/request-api" target="_blank" class="nav-link">Request Key &rarr;</a>
+          <a href="/" target="_blank" class="nav-link">Web Uploader &rarr;</a>
         </div>
       </div>
       <div class="header-right hidden" id="gallery-actions">
@@ -3491,7 +3484,7 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
         <p>Loading more files...</p>
       </div>
       <div id="end-message" class="end-message hidden">
-        <p>✓ All files loaded</p>
+        <p>All files loaded</p>
       </div>
     </div>
 
@@ -3505,8 +3498,8 @@ async function generateAdminPage(DATABASE, domain = 'media-hosting.dhyeyp254.wor
           <div class="token-form">
             <input type="text" id="new-token-name" class="token-input" placeholder="Developer / Application Name (e.g. Discord Bot, App Client)" />
             <select id="new-token-tier" class="token-input" style="flex: 0 0 190px; min-width: 170px; background: white;">
-              <option value="0">⚡ Free Tier (20MB)</option>
-              <option value="1">👑 Premium Tier (500MB)</option>
+              <option value="0">Free Tier (20MB)</option>
+              <option value="1">Premium Tier (500MB)</option>
             </select>
             <button class="btn-primary" onclick="createNewApiKey()">Generate API Token</button>
           </div>
